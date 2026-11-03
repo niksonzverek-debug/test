@@ -111,13 +111,18 @@ function btUpdateMasterBadge(d){
     const el=document.getElementById('btHomeMasterIdentity');
     if(el)el.innerHTML=btMasterVerifiedBadge(d?.master);
 }
+function btFormatPublicPhone(value){
+ const raw=String(value||'').trim();const digits=raw.replace(/\D/g,'');
+ if(digits.length===12&&digits.startsWith('998'))return '+998 '+digits.slice(3,5)+' '+digits.slice(5,8)+' '+digits.slice(8,10)+' '+digits.slice(10,12);
+ return raw;
+}
 function showClientMasterReviews(){
  setPage('👨‍🔧 Мой мастер','<article class="card" id="btMasterReviewsPanel"><p class="subtitle">Загружаем отзывы…</p></article>');
  clientApi('/api/client/master-reviews').then(data=>{
    const el=document.getElementById('btMasterReviewsPanel');if(!el)return;
    const avatar=(typeof data.master_avatar==='string'&&data.master_avatar.startsWith('data:image/jpeg;base64,')&&data.master_avatar.length<=180000)?`<img src="${escapeClient(data.master_avatar)}" alt="Фото мастера" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #3a8fff">`:'<div style="width:80px;height:80px;border-radius:50%;display:grid;place-items:center;background:#193956;font-size:32px">👨‍🔧</div>';
    const passport=data.verification?.passport_selfie===true?'✅ Паспорт и селфи проверены':'◯ Паспорт и селфи не проверены';
-   const profile=`<div style="display:flex;gap:14px;align-items:center;margin-bottom:12px">${avatar}<div><h2 style="margin:0">${escapeClient(data.master_name||'Мастер')}</h2><p class="subtitle">${escapeClient(data.master_phone||'Телефон не указан')}</p></div></div><p class="subtitle">${escapeClient(passport)}</p><p class="subtitle">Самозанятость · скоро</p><p class="subtitle">QR-чек · скоро</p><h3>О мастере</h3><p>${escapeClient(data.master_about||'Мастер пока не добавил информацию о себе.')}</p><hr>`;
+   const profile=`<div style="display:flex;gap:14px;align-items:center;margin-bottom:12px">${avatar}<div><h2 style="margin:0">${escapeClient(data.master_name||'Мастер')}</h2><p class="subtitle">${escapeClient(btFormatPublicPhone(data.master_phone||'Телефон не указан'))}</p></div></div><p class="subtitle">${escapeClient(passport)}</p><p class="subtitle">Самозанятость · скоро</p><p class="subtitle">QR-чек · скоро</p><h3>О мастере</h3><p>${escapeClient(data.master_about||'Мастер пока не добавил информацию о себе.')}</p><hr>`;
    if(!data.enabled){el.innerHTML=profile+'<h3>Отзывы</h3><p class="subtitle">У мастера пока нет отзывов.</p>';return;}
    const reviews=Array.isArray(data.reviews)?data.reviews:[];
    const title=profile+'<h3>Отзывы о мастере</h3>';

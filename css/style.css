@@ -1201,11 +1201,29 @@ body:has(.bt-client-home) > #btLangWidget{
 .bt-client-bottom-nav{bottom:0!important;padding-bottom:calc(8px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px)))!important}
 @media(max-width:360px){.bt-client-home .bt-client-header{padding-right:59px!important}}
 
-/* Client dashboard patch 2026-11-03: language dropdown stays INSIDE profile card. */
-.bt-client-home .bt-client-header .bt-lang-widget{position:absolute!important;top:50%!important;right:14px!important;left:auto!important;transform:translateY(-50%)!important;z-index:110!important;pointer-events:auto!important;}
-.bt-client-home .bt-client-header:has(.bt-lang-menu:not([hidden])) .bt-lang-widget{top:15px!important;transform:none!important;}
-.bt-client-home .bt-client-header .bt-lang-menu{position:absolute!important;top:calc(100% + 7px)!important;right:0!important;left:auto!important;min-width:175px!important;max-width:calc(100vw - 60px)!important;z-index:111!important;}
-.bt-client-home .bt-client-header:has(.bt-lang-menu:not([hidden])){padding-bottom:206px!important;}
 /* Remove lightning-shaped lines from client background, retain dark blue gradient. */
 body:has(.bt-client-home){background-image:radial-gradient(ellipse at 52% 8%,#0b3d75 0%,#061a37 42%,#030b1c 100%)!important;background-size:100% 100%!important;}
 .bt-client-home .bt-client-header{background-image:linear-gradient(170deg,#0b335e,#06182e 75%)!important;}
+
+/* PATCH 2026-11-03 v3: dropdown floats; opening must not resize the greeting card. */
+.bt-client-home .bt-client-header{
+  position:relative!important;overflow:visible!important;isolation:initial!important;
+  padding-right:91px!important;z-index:80!important;
+  /* Use the same original Electric Steel Blue card gradient in both states. */
+  background:linear-gradient(145deg,#112641,#081525)!important;
+  background-image:linear-gradient(145deg,#112641,#081525)!important;
+}
+.bt-client-home .bt-client-header .bt-lang-widget{
+  position:absolute!important;top:50%!important;right:14px!important;left:auto!important;
+  transform:translateY(-50%)!important;z-index:100!important;pointer-events:auto!important;
+}
+.bt-client-home .bt-client-header:has(.bt-lang-menu:not([hidden])){padding-bottom:13px!important;}
+.bt-client-home .bt-client-header:has(.bt-lang-menu:not([hidden])) .bt-lang-widget{
+  top:50%!important;transform:translateY(-50%)!important;
+}
+.bt-client-home .bt-client-header .bt-lang-menu{
+  position:absolute!important;top:calc(100% + 7px)!important;right:0!important;left:auto!important;
+  width:max-content!important;min-width:175px!important;max-width:calc(100vw - 55px)!important;
+  z-index:120!important;background:#0a213b!important;
+}
+@media(max-width:360px){.bt-client-home .bt-client-header{padding-right:87px!important;}}
