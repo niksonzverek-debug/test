@@ -1061,3 +1061,21 @@ body:has(.bt-client-home),body:has(.master-app){
   }
 }
 .bt-acts-more-sentinel {text-align:center;padding:18px 10px;color:#a5c5ec;font-size:13px;}
+
+/* Compact master order list: keep the existing Electric Steel Blue visuals. */
+.master-app .bt-order-compact{padding:12px 14px!important;margin-bottom:7px!important}
+.master-app .bt-order-compact .card-row{margin-bottom:5px}
+.master-app .bt-order-summary{display:flex;justify-content:space-between;gap:8px;align-items:baseline;font-size:14px}
+.master-app .bt-order-summary span{font-size:12px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%}
+.master-app .bt-order-short{font-size:12px;margin:5px 0!important;overflow-wrap:anywhere}
+.master-app .bt-order-details{font-size:12px;margin:4px 0}
+.master-app .bt-order-details summary{cursor:pointer;color:#75caff}
+.master-app .bt-order-details p{margin:5px 0}
+.master-app .bt-order-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.master-app .bt-order-actions button,.master-app .bt-order-actions a{min-height:35px!important;padding:7px 9px!important;font-size:12px!important;flex:1 1 auto}
+.bt-client-address-row{display:grid;grid-template-columns:minmax(0,3fr) minmax(75px,1fr);gap:9px;align-items:end}
+.bt-client-address-row>div{min-width:0}
+.bt-client-address-row input{width:100%;box-sizing:border-box}
+.bt-client-submit-glow.bt-field-empty{box-shadow:0 0 0 2px rgba(255,45,70,.6),0 0 18px rgba(255,40,60,.65)!important;border-color:#ff405d!important}
+.bt-client-submit-glow.bt-field-ready{box-shadow:0 0 0 2px rgba(42,232,136,.55),0 0 18px rgba(30,225,126,.62)!important;border-color:#36e993!important}
+.bt-act-payment-warning{font-size:12px;line-height:1.45;color:#e8f5ff;margin:9px 0}

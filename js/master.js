@@ -376,21 +376,25 @@ function showMasterFAQ(){
   masterShell('F.A.Q. — Помощь',`<article class="card bt-faq-card"><p class="subtitle">Ответы на частые вопросы о работе в ТехСервис.</p>${items.map(([q,a])=>`<details><summary>${masterEsc(q)}</summary><p>${masterEsc(a)}</p></details>`).join('')}<button type="button" class="secondary" onclick="renderMasterMenu()">← Главная</button></article>`);
 }
 function masterOrderMapUrl(order){
- const l=order?.location;
- if(l&&typeof l==='object'){
-   const lat=Number(l.lat??l.latitude),lon=Number(l.lon??l.longitude);
+ const candidates=[order?.location,order?.geo,order?.coordinates,order?.client_location];
+ for(const l of candidates){
+   if(!l||typeof l!=='object')continue;
+   const lat=Number(l.lat??l.latitude),lon=Number(l.lon??l.lng??l.longitude);
    if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180)
      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat+','+lon)}`;
  }
- // Google Maps can search an address when the customer did not share GPS.
  const address=String(order?.address||order?.house||'').trim();
- if(address&&address!=='📍 Геолокация клиента')
+ if(address&&address!=='📍 Геолокация клиента'&&!/^GPS[: ]/i.test(address))
    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
  return '';
 }
 function statusLabel(s){return ({new:'Новая',accepted:'Принята',rejected:'Отклонена',in_progress:'В работе',act_issued:'Акт отправлен',closed:'Закрыта',completed:'Завершена',archived_admin:'Удалена администратором'})[s]||s||'—';}
 async function showMasterOrders(){try{await loadMasterData();}catch(e){return masterShell('Заявки',`<article class="card error">${masterEsc(e.message)}</article>`)}
- const rows=masterCache.orders.map(o=>`<article class="card order-card ${o.status==='new'?'bt-new-order':''}"><div class="card-row"><b>${masterEsc(o.id)}</b><span class="status-pill ${o.status==='new'?'status-new':''}">${masterEsc(statusLabel(o.status))}</span></div><h3>${masterEsc([o.device,o.brand,o.model].filter(Boolean).join(' ')||'Ремонт техники')}</h3><p><b>Клиент:</b> ${masterEsc(o.client_name||'Клиент')} · ${masterEsc(o.client_phone||'телефон не указан')}</p><p>${masterEsc(o.problem||o.comment||'Описание не указано')}</p><p class="subtitle">${masterEsc([o.when_date,o.when_time,o.address||o.house].filter(Boolean).join(' · '))}</p>${o.status==='archived_admin'?`<p class="subtitle"><b>Причина удаления:</b> ${masterEsc(o.admin_archive_reason||'Не указана')}</p>`:''}${o.status==='new'&&Date.now()-Date.parse(o.created_at||'')>2*3600*1000?'<p class="bt-overdue-note">⚠ Ожидает ответа более двух часов</p>':''}<div class="button-row">${o.status==='new'?`<button onclick="decideMasterOrder('${masterEsc(o.id)}','accept')">✓ Принять</button><button class="secondary" onclick="decideMasterOrder('${masterEsc(o.id)}','reject')">Отклонить</button>`:''}${o.status==='accepted'&&!o.act_number?`<button onclick="showMasterCreateAct('${masterEsc(o.id)}')">📄 Создать акт</button>`:''}${o.client_id?`<button class="secondary" onclick="openMasterChat('${masterEsc(o.client_id)}')">💬 Написать клиенту</button>`:''}${o.status==='accepted'&&masterOrderMapUrl(o)?`<a class="secondary menu-btn" target="_blank" rel="noopener noreferrer" href="${masterEsc(masterOrderMapUrl(o))}">📍 Открыть маршрут</a>`:''}</div></article>`).join('');
+ const rows=masterCache.orders.map(o=>{
+   const id=masterEsc(o.id),route=masterOrderMapUrl(o);
+   const actions=`${o.status==='new'?`<button onclick="decideMasterOrder('${id}','accept')">✓ Принять</button><button class="secondary" onclick="decideMasterOrder('${id}','reject')">Отклонить</button>`:''}${o.status==='accepted'&&!o.act_number?`<button onclick="showMasterCreateAct('${id}')">📄 Создать акт</button>`:''}${o.client_id?`<button class="secondary" onclick="openMasterChat('${masterEsc(o.client_id)}')">💬 Чат</button>`:''}${o.status==='accepted'&&route?`<a class="secondary menu-btn" target="_blank" rel="noopener noreferrer" href="${masterEsc(route)}">📍 Маршрут</a>`:''}`;
+   return `<article class="card order-card bt-order-compact ${o.status==='new'?'bt-new-order':''}"><div class="card-row"><b>${id}</b><span class="status-pill ${o.status==='new'?'status-new':''}">${masterEsc(statusLabel(o.status))}</span></div><div class="bt-order-summary"><strong>${masterEsc([o.device,o.brand,o.model].filter(Boolean).join(' ')||'Ремонт техники')}</strong><span>${masterEsc(o.client_name||'Клиент')}</span></div><p class="subtitle bt-order-short">${masterEsc([o.when_date,o.when_time,o.address||o.house].filter(Boolean).join(' · '))}</p><details class="bt-order-details"><summary>Подробнее о заявке</summary><p><b>Телефон:</b> ${masterEsc(o.client_phone||'—')}</p><p>${masterEsc(o.problem||o.comment||'Описание не указано')}</p>${o.status==='archived_admin'?`<p><b>Причина удаления:</b> ${masterEsc(o.admin_archive_reason||'Не указана')}</p>`:''}</details><div class="button-row bt-order-actions">${actions}</div></article>`;
+ }).join('');
  masterShell('Заявки',`<div class="section-heading"><p>Сначала показываются последние заявки. Действия доступны только по заявкам вашего кабинета.</p><select id="orderFilter" onchange="filterMasterOrders()"><option value="all">Все статусы</option><option value="new">Новые</option><option value="accepted">Принятые</option><option value="act_issued">Акт отправлен</option><option value="closed">Закрытые</option><option value="archived_admin">Архив (удалены администратором)</option></select></div><div id="masterOrderList" class="stack-list">${rows||'<article class="card">Заявок пока нет.</article>'}</div>`);}
 function filterMasterOrders(){const f=document.getElementById('orderFilter')?.value||'all';document.querySelectorAll('#masterOrderList .order-card').forEach((el,i)=>{const o=masterCache.orders[i];el.style.display=f==='all'||o?.status===f?'':'none';});}
 async function decideMasterOrder(id,decision){try{const r=await masterApi(`/api/master/orders/${encodeURIComponent(id)}/decision`,'POST',{decision});masterToast(r.message);await showMasterOrders();}catch(e){masterToast(e.message,true);}}
@@ -676,7 +680,7 @@ async function renderMasterActForm(o=null){
  <div class="bt-master-address-row"><div><label>Дом *</label><input id="actHouse" required maxlength="80" value="${masterEsc(o?.house||'')}" placeholder="15А"></div><div><label>Квартира</label><input id="actApartment" maxlength="80" value="${masterEsc(o?.apartment||'')}" placeholder="42"></div></div>
  <button id="actLocationButton" type="button" class="secondary bt-act-required" onclick="captureActLocation()">⌖ Указать текущую локацию</button><p id="actLocationStatus" class="subtitle">Для создания акта требуется локация. Нажмите кнопку и разрешите доступ к GPS.</p>
 
- <button id="actSubmit" type="submit">▣ Создать акт</button><p id="actStatus" role="status" class="subtitle"></p></article></form>`);
+ <button id="actSubmit" type="submit">▣ Создать акт</button><p class="bt-act-payment-warning"><b>Нажимая «Создать акт», Вы подтверждаете, что получили оплату за выполненный ремонт и работы.</b></p><p id="actStatus" role="status" class="subtitle"></p></article></form>`);
  toggleActCustom('actDevice','actDeviceCustomWrap');toggleActCustom('actBrand','actBrandCustomWrap');renderMasterActWorks();btActUpdateLocationGlow();
 }
 function formatActPrice(input){const digits=String(input.value||'').replace(/\D/g,'');input.value=digits?digits.replace(/\B(?=(\d{3})+(?!\d))/g,' '):'';}

@@ -1133,11 +1133,9 @@ function showNewOrder() {
         </div>
 
         <div class="card">
-            <label for="house">Адрес выезда (или геолокация)</label>
-            <input id="house" maxlength="80" placeholder="Например: Ташкент, ул. Навои, дом 15" autocomplete="street-address" oninput="btClientManualAddressChanged()">
-            <label for="apartment" style="margin-top:12px">Квартира / ориентир (необязательно)</label>
-            <input id="apartment" maxlength="80" placeholder="Квартира 42, подъезд 2" autocomplete="off">
-            <p class="subtitle">Выберите один способ: укажите адрес вручную или отправьте точку GPS. Можно заказать ремонт домой, находясь в другом месте.</p>
+            <label for="house">Адрес ремонта</label>
+            <div class="bt-client-address-row"><div><label for="house">Дом / улица</label><input id="house" maxlength="120" placeholder="Ташкент, Навои, 15" autocomplete="street-address" oninput="btClientManualAddressChanged()"></div><div><label for="apartment">Кв.</label><input id="apartment" maxlength="80" placeholder="42" autocomplete="off"></div></div>
+            <p class="subtitle">Введите адрес вручную или отправьте текущую локацию. Если Вы не дома, просто укажите адрес ремонта.</p>
             <button onclick="sendLocation()" style="margin-top:14px;padding:14px;font-size:16px;background:#f0f0f0;border:1px solid #ddd;border-radius:10px;width:100%;cursor:pointer;">
                 📍 Отправить мою локацию
             </button>
@@ -1148,15 +1146,16 @@ function showNewOrder() {
         </div>
 
         <div class="card promo-card" id="orderPromoCard">
-            <label>🎟️ Промокод (необязательно)</label>
+            <label>🎟️ Промокод</label>
             <input id="order_promo_code" placeholder="Например, REMONT10" maxlength="64" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase">
             <button type="button" id="orderPromoCheck" onclick="checkOrderPromo()">Проверить промокод</button>
             <p id="orderPromoStatus" class="subtitle">Активный промокод привяжется к вашему аккаунту автоматически при отправке заявки.</p>
         </div>
 
-        <button id="submit" class="bt-client-submit" onclick="submitOrder()">📤 Отправить заявку</button>
+        <button id="submit" class="bt-client-submit bt-client-submit-glow bt-field-empty" onclick="submitOrder()">📤 Отправить заявку</button>
     ` + btClientBottomNav();
     btEnhanceClientOrderPickers();
+    btClientBindOrderValidation();
 
     try {
         document.getElementById('house').value = isNewClientFlow
@@ -1175,6 +1174,7 @@ function showNewOrder() {
         const identityCard=document.getElementById('clientIdentityCard');
         const firstNameDone=localStorage.getItem('remont_bt_customer_name_confirmed')==='1';
         identityCard.style.display=firstNameDone?'none':'block';
+        btClientUpdateSubmitGlow();
         clientApi('/api/client/profile').then(d=>{
             const profile=d.profile||{};
             if(profile.name)document.getElementById('client_name').value=profile.name;
@@ -1182,7 +1182,7 @@ function showNewOrder() {
                 identityCard.style.display='none';
                 localStorage.setItem('remont_bt_customer_name_confirmed','1');
             }else identityCard.style.display='block';
-        }).catch(()=>{});
+        }).then(()=>btClientUpdateSubmitGlow()).catch(()=>{});
     } catch (e) {
         console.error('Ошибка инициализации формы клиента:', e);
     }
@@ -1252,6 +1252,7 @@ function btRenderStyledClientPicker(selectId){
 function btChooseClientPicker(selectId,button){
     const native=document.getElementById(selectId);if(!native)return;
     native.value=button.dataset.pickerValue;
+    btClientUpdateSubmitGlow();
     document.getElementById(selectId+'StyledPicker').open=false;
     document.getElementById(selectId+'StyledSummary').textContent=button.querySelector('span:nth-child(2)')?.textContent||native.value;
     for(const other of document.querySelectorAll(`#${selectId}StyledPicker .bt-client-picker-option`))other.classList.toggle('selected',other===button);
@@ -1279,16 +1280,39 @@ function onBrandChange() {
 // если клиент вручную вводит адрес дома.
 function btClientManualAddressChanged(){
     orderData.location=null;
+    btClientUpdateSubmitGlow();
     const status=document.getElementById('location_status');
     if(status)status.textContent='Используется адрес, введённый вручную (без GPS).';
 }
 function btClientLocationSelected(lat,lon){
     orderData.location={lat:Number(lat),lon:Number(lon)};
+    btClientUpdateSubmitGlow();
     // Не смешиваем адрес предыдущей заявки с новой точкой GPS.
     const house=document.getElementById('house');
     const apartment=document.getElementById('apartment');
     if(house)house.value='';
     if(apartment)apartment.value='';
+    btClientUpdateSubmitGlow();
+}
+
+// Button glow reflects all required order fields; visual feedback only.
+function btClientUpdateSubmitGlow(){
+    const btn=document.getElementById('submit');if(!btn)return;
+    const value=id=>String(document.getElementById(id)?.value||'').trim();
+    const device=value('device')==='__other__'?value('device_custom'):value('device');
+    const brand=value('brand')==='__other__'?value('brand_custom'):value('brand');
+    const identity=document.getElementById('clientIdentityCard');
+    const nameOk=!identity||identity.style.display==='none'||value('client_name').length>=2;
+    const loc=orderData.location;
+    const gpsOk=loc&&Number.isFinite(Number(loc.lat))&&Number.isFinite(Number(loc.lon));
+    const ready=Boolean(nameOk&&device&&brand&&value('problem').length>=5&&value('when_date')&&value('when_time')&&(value('house')||gpsOk));
+    btn.classList.toggle('bt-field-ready',ready);btn.classList.toggle('bt-field-empty',!ready);
+}
+function btClientBindOrderValidation(){
+    const form=document.getElementById('submit')?.parentElement;if(!form)return;
+    form.addEventListener('input',btClientUpdateSubmitGlow);
+    form.addEventListener('change',btClientUpdateSubmitGlow);
+    btClientUpdateSubmitGlow();
 }
 
 // ============ ЛОКАЦИЯ ============
