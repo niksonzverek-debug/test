@@ -42,7 +42,7 @@ async function downloadMasterAct(number){
     document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
   }catch(e){masterToast(e.message,true);}
 }
-const masterActStatusLabels={sending:'Отправляется',sent:'Отправлен клиенту',pending:'Ожидает привязки',pending_client:'Ожидает регистрации клиента',pending_delivery:'Ожидает доставки',confirmed:'Подтверждён клиентом',cancelled:'Отменён',draft:'Черновик'};
+const masterActStatusLabels={sending:'Отправляется',sent:'Отправлен клиенту',pending:'Ожидает привязки',pending_client:'Ожидает регистрации клиента',pending_delivery:'Ожидает доставки',confirmed:'Подтверждён клиентом',confirmed_automatic:'Подтверждён автоматически',cancelled:'Отменён',draft:'Черновик'};
 function masterActStatus(v){return masterActStatusLabels[v]||v||'Без статуса';}
 function masterActSummary(number){
  const act=masterCache.acts.find(a=>String(a.number)===String(number));
@@ -74,7 +74,10 @@ async function openMasterActPdf(number){
  catch(e){masterToast(e.message,true)}
 }
 function btMasterActPaymentLabel(status){return status==='paid'?'✓ Оплачено':status==='unpaid'?'Не оплачено':'Оплата не указана';}
+let btMasterPaymentSaving=false;
 async function btMasterSaveActPayment(number,status){
+ if(btMasterPaymentSaving)return;
+ btMasterPaymentSaving=true;
  try{
   await masterApi(`/api/master/acts/${encodeURIComponent(String(number))}/payment-status`,'POST',{status});
   const act=masterCache.acts.find(a=>String(a.number)===String(number));
@@ -82,6 +85,7 @@ async function btMasterSaveActPayment(number,status){
   masterToast('Статус оплаты сохранён');
   previewMasterAct(number);
  }catch(e){masterToast(e.message||'Не удалось сохранить статус',true)}
+ finally{btMasterPaymentSaving=false;}
 }
 function btMasterAskPayment(number){
  btMasterLastActNumber=number;
@@ -95,7 +99,7 @@ async function previewMasterAct(number){
  masterShell('Просмотр акта',`<article class="card"><h2>Акт № ${masterEsc(number)}</h2>
  <p class="subtitle">Содержимое акта отображается сразу. PDF откроется в просмотрщике телефона или браузере.</p>
  ${masterActSummary(number)}<div class="card"><p><b>Оплата:</b> ${masterEsc(btMasterActPaymentLabel(masterCache.acts.find(a=>String(a.number)===String(number))?.payment_status))}</p>
- <div class="button-row"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">✓ Оплачено</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Не оплачено</button></div></div>
+ ${!['paid','unpaid'].includes(masterCache.acts.find(a=>String(a.number)===String(number))?.payment_status)?`<div class="button-row"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">✓ Оплачено</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Не оплачено</button></div>`:'<p class="subtitle">Ответ мастера зафиксирован и не подлежит изменению.</p>'}</div>
  <div class="button-row"><button type="button" onclick="openMasterActPdf('${masterEsc(number)}')">📄 Открыть PDF</button>
  <button type="button" class="secondary" onclick="downloadMasterAct('${masterEsc(number)}')">↓ Сохранить PDF</button></div>
  <div class="button-row"><button type="button" onclick="shareMasterAct('${masterEsc(number)}')">↗ Поделиться через Telegram</button>
