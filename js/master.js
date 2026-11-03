@@ -161,7 +161,7 @@ function btMasterRestoreRoute(title){
    'Написать в поддержку':()=>showMasterSupport(),
    'Рекламная ссылка':()=>showMasterMarketingLink(),
    'Моя ссылка для клиентов':()=>showMasterInviteLink(),
-   'Мой QR для оплаты':()=>showMasterPaymentQr(),
+   'Моя ссылка для оплаты':()=>showMasterPaymentQr(),
    'Мой депозит':()=>showMasterFinance(),
    'Диалог':()=>openMasterChat(clientId),
    'Просмотр акта':()=>previewMasterAct(actNumber),
@@ -368,7 +368,7 @@ async function renderMasterMenu() {
     <button class="menu-btn" onclick="showMasterPromos()"><span class="emoji">◇</span><b>Промокоды</b><small>Скидки</small></button>
     <button class="menu-btn" onclick="showMasterFinanceReport()"><span class="emoji">▥</span><b>Финансы</b><small>Отчёт</small></button>
     <button class="menu-btn" onclick="showMasterInviteLink()"><span class="emoji">↗</span><b>Моя ссылка</b><small>Для клиентов</small></button>
-    <button class="menu-btn" onclick="showMasterPaymentQr()"><span class="emoji">▦</span><b>Мой QR</b><small>Для оплаты</small></button>
+    <button class="menu-btn" onclick="showMasterPaymentQr()"><span class="emoji">▦</span><b>Paynet Xolis</b><small>Ссылка для оплаты</small></button>
 
     <button class="menu-btn" onclick="showMasterFAQ()"><span class="emoji">♧</span><b>F.A.Q.</b><small>Помощь</small></button>
     <button class="menu-btn" onclick="showMasterSupport()"><span class="emoji">✉</span><b>Поддержка</b><small>Написать администратору</small></button>
@@ -395,7 +395,7 @@ function showMasterFAQ(){
       ['Как пополнить депозит?','Откройте баланс и следуйте доступной инструкции по оплате. Если требуется чек, прикрепите его и дождитесь подтверждения администратора.'],
       ['Как работают промокоды?','В разделе «Промокоды» создавайте и отслеживайте доступные предложения для клиентов и партнёров. Условия, сроки и лимиты указываются для каждого кода.'],
       ['Где моя ссылка для клиентов?','На главной странице откройте «Моя ссылка для клиентов». Клиент, зарегистрировавшийся по ней, закрепляется по правилам системы.'],
-      ['Как настроить QR для оплаты?','Откройте «Мой QR для оплаты» и загрузите изображение QR-кода из используемого платёжного приложения.'],
+      ['Как настроить оплату через Paynet?','Откройте «Paynet Xolis» на главной панели и сохраните свою ссылку для оплаты.'],
       ['Что даёт идентификация мастера?','Идентификация добровольная. Отправьте запрошенные документы и селфи на ручную проверку. После одобрения появится отметка «Личность проверена»; работать можно и без неё.'],
       ['Когда начисляется бонус за идентификацию?','Разовый бонус 20 000 сум предусмотрен после первого успешного одобрения администратором. Повторное одобрение не даёт нового бонуса.'],
       ['Что означает удаление принятой заявки администратором?','Такая заявка переносится в архив с причиной. Откройте историю, чтобы увидеть комментарий. Уже выданные акты и финансовые операции не должны удаляться.'],
@@ -1057,35 +1057,54 @@ async function btCopyMasterInviteLink(){
  catch(_){document.getElementById('btInviteLinkUrl')?.select();masterToast('Выделите ссылку и скопируйте');}
 }
 async function showMasterPaymentQr(){
- masterShell('Мой QR для оплаты',`<article class="card"><h2>QR для оплаты</h2><p class="subtitle">Загрузите готовый QR-код из вашего банка или платёжного приложения. Это только изображение для показа клиенту: оплата не подтверждается автоматически.</p><div id="btPaymentQrPreview">Загружаем…</div><label for="btPaymentQrFile">Выбрать изображение QR</label><input id="btPaymentQrFile" type="file" accept="image/png,image/jpeg,image/webp" onchange="btUploadPaymentQr(this)"><div id="btPaymentQrStatus" role="status"></div><button type="button" class="secondary" onclick="btDeletePaymentQr()">Удалить QR</button><button type="button" class="secondary" onclick="renderMasterMenu()">← Главная</button></article>`);
- await btRefreshPaymentQr();
+  masterShell('Моя ссылка для оплаты',`<article class="card"><h2>Paynet Xolis</h2>
+    <p class="subtitle">Вставьте ссылку на оплату из Paynet Xolis. Клиент увидит кнопку оплаты в своём акте, только если ссылка сохранена.</p>
+    <label for="btMasterPaymentLink">Ссылка Paynet Xolis</label>
+    <textarea id="btMasterPaymentLink" rows="4" maxlength="2048" placeholder="https://app.paynet.uz/qr-online/..."></textarea>
+    <div id="btMasterPaymentLinkStatus" class="subtitle" role="status"></div>
+    <button type="button" id="btMasterPaymentLinkSave" onclick="btSaveMasterPaymentLink()">Сохранить ссылку</button>
+    <button type="button" class="secondary" onclick="btTestMasterPaymentLink()">Проверить ссылку</button>
+    <button type="button" class="secondary" onclick="btRemoveMasterPaymentLink()">Удалить ссылку</button>
+    <button type="button" class="secondary" onclick="renderMasterMenu()">← Главная</button>
+    <p class="subtitle">Переход по ссылке не подтверждает оплату. Проверяйте поступление денег в Paynet Xolis.</p></article>`);
+  try{
+    await loadMasterData();
+    const field=document.getElementById('btMasterPaymentLink');
+    if(field)field.value=masterCache.profile?.paynet_url||'';
+  }catch(e){const status=document.getElementById('btMasterPaymentLinkStatus');if(status)status.textContent=e.message;}
 }
-async function btRefreshPaymentQr(){
- const el=document.getElementById('btPaymentQrPreview');if(!el)return;
- try{const d=await masterApi('/api/master/payment-qr');
-  if(!document.getElementById('btPaymentQrPreview'))return;
-  el.innerHTML=d.image?`<img alt="QR-код для оплаты мастеру" src="${masterEsc(d.image)}" style="display:block;width:100%;max-width:340px;margin:10px auto;image-rendering:auto"><p class="subtitle">Покажите этот QR клиенту для оплаты.</p>`:'<p class="subtitle">QR ещё не загружен.</p>';
- }catch(e){el.textContent=e.message;}
+function btValidMasterPaymentLink(value){
+  if(!value)return true;
+  try{const u=new URL(value);return u.protocol==='https:' && ['app.paynet.uz','paynet.uz'].includes(u.hostname.toLowerCase()) && !u.username && !u.password && !/\s/.test(value) && value.length<=2048;}
+  catch(_){return false;}
 }
-async function btUploadPaymentQr(input){
- const file=input.files?.[0],status=document.getElementById('btPaymentQrStatus');if(!file)return;
- if(!['image/png','image/jpeg','image/webp'].includes(file.type)){status.textContent='Выберите PNG, JPEG или WebP.';return;}
- if(file.size>5*1024*1024){status.textContent='Файл слишком большой (максимум 5 МБ).';return;}
- status.textContent='Подготавливаем изображение…';input.disabled=true;
- try{
-  const bitmap=await createImageBitmap(file);const canvas=document.createElement('canvas');
-  const ratio=Math.min(1,700/Math.max(bitmap.width,bitmap.height));canvas.width=Math.max(1,Math.round(bitmap.width*ratio));canvas.height=Math.max(1,Math.round(bitmap.height*ratio));
-  canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close?.();
-  // PNG сохраняет резкие границы QR без JPEG-артефактов.
-  const image=canvas.toDataURL('image/png');
-  if(image.length>250000)throw new Error('QR слишком сложный для хранения. Обрежьте изображение до самого QR и повторите.');
-  await masterApi('/api/master/payment-qr','POST',{image});status.textContent='QR сохранён.';await btRefreshPaymentQr();
- }catch(e){status.textContent='Ошибка: '+e.message;}finally{input.disabled=false;input.value='';}
+async function btSaveMasterPaymentLink(){
+  const field=document.getElementById('btMasterPaymentLink'),status=document.getElementById('btMasterPaymentLinkStatus'),button=document.getElementById('btMasterPaymentLinkSave');
+  if(!field||!status||!button)return;
+  const url=field.value.trim();
+  if(!url){status.textContent='Введите ссылку или нажмите «Удалить ссылку».';return;}
+  if(!btValidMasterPaymentLink(url)){status.textContent='Нужна корректная HTTPS-ссылка Paynet Xolis.';return;}
+  button.disabled=true;status.textContent='Сохраняем…';
+  try{
+    await masterApi('/api/master/settings','POST',{paynet_url:url});
+    if(!masterCache.profile)masterCache.profile={};masterCache.profile.paynet_url=url;
+    status.textContent='Ссылка сохранена. Клиент увидит кнопку оплаты в акте.';
+  }catch(e){status.textContent='Ошибка: '+e.message;}finally{button.disabled=false;}
 }
-async function btDeletePaymentQr(){
- const status=document.getElementById('btPaymentQrStatus');
- try{await masterApi('/api/master/payment-qr','POST',{image:null});if(status)status.textContent='QR удалён.';await btRefreshPaymentQr();}
- catch(e){if(status)status.textContent=e.message;}
+function btTestMasterPaymentLink(){
+  const field=document.getElementById('btMasterPaymentLink'),status=document.getElementById('btMasterPaymentLinkStatus');
+  const url=field?.value.trim()||'';
+  if(!url||!btValidMasterPaymentLink(url)){if(status)status.textContent='Сначала укажите корректную ссылку Paynet.';return;}
+  window.open(url,'_blank','noopener,noreferrer');
+}
+async function btRemoveMasterPaymentLink(){
+  const status=document.getElementById('btMasterPaymentLinkStatus'),field=document.getElementById('btMasterPaymentLink');
+  if(!status||!field)return;
+  status.textContent='Удаляем…';
+  try{await masterApi('/api/master/settings','POST',{paynet_url:''});
+    if(!masterCache.profile)masterCache.profile={};masterCache.profile.paynet_url='';field.value='';
+    status.textContent='Ссылка удалена. Кнопка оплаты у клиента скрыта.';
+  }catch(e){status.textContent='Ошибка: '+e.message;}
 }
 
 /* Finance module: read-only balance and manual Paynet Xolis receipt request.
