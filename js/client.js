@@ -684,46 +684,55 @@ async function confirmClientActRequest(orderId) {
 
 let btClientActsCache=[];
 const btActMoney=value=>new Intl.NumberFormat('ru-RU').format(Number(value||0))+' сум';
+function btClientActStatus(status){
+    const statuses={sending:'Отправляется',sent:'Отправлен клиенту',pending_client:'Ожидает регистрации клиента',pending_delivery:'Ожидает доставки',confirmed:'Подтверждён',confirmed_automatic:'Подтверждён автоматически',confirmed_auto:'Подтверждён автоматически',auto_confirmed:'Подтверждён автоматически',cancelled:'Отменён',draft:'Черновик'};
+    return statuses[String(status||'').toLowerCase()]||'Статус уточняется';
+}
 function btWarrantyIndicator(act){
     const raw=String(act.guarantee_until||'');
     const m=/^(\d{2})\.(\d{2})\.(\d{4})$/.exec(raw);
-    if(!m || Number(act.guarantee_days||0)===0)return '<p class="subtitle">Гарантия: согласно условиям акта.</p>';
+    if(!m || Number(act.guarantee_days||0)===0)return '<span class="bt-act-warranty-muted">Гарантия по условиям акта</span>';
     const end=new Date(Number(m[3]),Number(m[2])-1,Number(m[1]),23,59,59);
     const active=Number.isFinite(end.getTime())&&end>=new Date();
-    return `<p class="bt-warranty-note ${active?'bt-warranty-active':'bt-warranty-expired'}">${active?'✓ Гарантия действует':'Срок гарантии истёк'}</p>`;
+    return `<span class="${active?'bt-warranty-active':'bt-warranty-expired'}">${active?'✓ Гарантия действует':'Гарантия истекла'}</span>`;
+}
+function btClientActTitle(act){
+    return [act.device,act.brand,act.model].filter(Boolean).join(' ')||'Ремонт техники';
 }
 async function showMyActs() {
     setPage('📄 Акты и документы', '<p class="subtitle">Загружаем документы…</p>');
     try {
-        const d = await clientApi('/api/client/dashboard');
-        btClientActsCache = (d.acts || []).filter(a=>a.status!=='cancelled');
-        const statuses={sending:'Отправляется',sent:'Отправлен клиенту',pending_client:'Ожидает регистрации клиента',pending_delivery:'Ожидает доставки',confirmed:'Подтверждён',cancelled:'Отменён',draft:'Черновик'};
-        const masterHeader=`<div class="card"><b>Мастер: ${escapeClient(d.master?.name||'Не назначен')}</b> ${btMasterVerifiedBadge(d.master)}</div>`;
-        const content=btClientActsCache.length?btClientActsCache.map(a=>`<article class="card">
-          <div class="card-row"><b>Акт № ${escapeClient(a.number||'—')}</b><span class="status-pill">${escapeClient(statuses[a.status]||a.status||'—')}</span></div>
-          <p>${escapeClient([a.device,a.brand,a.model].filter(Boolean).join(' '))}</p>
-          <p>Стоимость ремонта: ${escapeClient(btActMoney(a.price))}</p>
-          ${Number(a.discount_amount||0)>0?`<p>Скидка: −${escapeClient(btActMoney(a.discount_amount))}</p>`:''}
-          <p><b>Итого: ${escapeClient(btActMoney(a.final_price??a.price))}</b></p>
-          <p>Гарантия: ${escapeClient(a.guarantee_text||'—')} · до ${escapeClient(a.guarantee_until||'—')}</p>
-          ${btWarrantyIndicator(a)}
-          <button type="button" onclick="showClientActPreview('${escapeClient(a.number)}')">📄 Посмотреть акт</button></article>`).join(''):'<div class="card">Актов пока нет.</div>';
-        setPage('📄 Акты и документы',content);
+        const d=await clientApi('/api/client/dashboard');
+        btClientActsCache=(d.acts||[]).filter(a=>a.status!=='cancelled');
+        const content=btClientActsCache.length?btClientActsCache.map((a,index)=>`<button type="button" class="bt-client-act-compact" onclick="showClientActPreviewByIndex(${index})" aria-label="Подробности акта ${escapeClient(a.number||'')}">
+          <span class="bt-client-act-head"><strong>Акт № ${escapeClient(a.number||'—')}</strong><span class="bt-client-act-chevron">›</span></span>
+          <span class="bt-client-act-device">${escapeClient(btClientActTitle(a))}</span>
+          <span class="bt-client-act-meta"><strong>${escapeClient(btActMoney(a.final_price??a.price))}</strong><span>${btWarrantyIndicator(a)}</span></span>
+          <span class="bt-client-act-status">${escapeClient(btClientActStatus(a.status))}</span>
+        </button>`).join(''):'<div class="card">Актов пока нет.</div>';
+        setPage('📄 Акты и документы',`<div class="bt-client-act-list">${content}</div>`);
     } catch(e){setPage('📄 Акты и документы',`<div class="card error">${escapeClient(e.message)}</div>`);}
+}
+function showClientActPreviewByIndex(index){
+    const act=btClientActsCache[index];
+    if(!act){showMyActs();return;}
+    showClientActPreview(act.number);
 }
 function showClientActPreview(number){
     btClientActPreviewNumber=number;
     const act=btClientActsCache.find(a=>String(a.number)===String(number));
     if(!act){showMyActs();return;}
     const works=Array.isArray(act.works)?act.works:[];
-    setPage('📄 Просмотр акта',`<article class="card bt-act-readable"><h2>Акт № ${escapeClient(act.number)}</h2>
-      <p><b>Техника:</b> ${escapeClient([act.device,act.brand,act.model].filter(Boolean).join(' '))}</p>
-      <p><b>Выполненные работы:</b></p><ol>${works.map(w=>`<li>${escapeClient(w)}</li>`).join('')||'<li>Не указаны</li>'}</ol>
+    setPage('📄 Подробности ремонта',`<article class="card bt-act-readable bt-client-act-detail">
+      <h2>Акт № ${escapeClient(act.number||'—')}</h2>
+      <p class="bt-client-act-detail-status">${escapeClient(btClientActStatus(act.status))}</p>
+      <p><b>Техника:</b> ${escapeClient(btClientActTitle(act))}</p>
+      <p><b>Выполненные работы:</b></p><ol>${works.map(w=>`<li>${escapeClient(typeof w==='string'?w:(w?.name||w?.title||'Работа'))}</li>`).join('')||'<li>Не указаны</li>'}</ol>
       <p><b>Стоимость ремонта:</b> ${escapeClient(btActMoney(act.price))}</p>
       ${Number(act.discount_amount||0)>0?`<p><b>Скидка:</b> −${escapeClient(btActMoney(act.discount_amount))}</p>`:''}
-      <p><b>Итого к оплате:</b> ${escapeClient(btActMoney(act.final_price??act.price))}</p>
+      <p><b>Итого:</b> ${escapeClient(btActMoney(act.final_price??act.price))}</p>
       <p><b>Гарантия:</b> ${escapeClient(act.guarantee_text||'—')} · до ${escapeClient(act.guarantee_until||'—')}</p>
-      <p>Для просмотра оригинала нажмите «Открыть PDF».</p>
+      <p>${btWarrantyIndicator(act)}</p>
       <button type="button" onclick="openClientActPdf('${escapeClient(number)}')">📄 Открыть PDF</button>
       <button type="button" class="secondary" onclick="downloadClientActPdf('${escapeClient(number)}')">↓ Сохранить PDF</button>
       <button type="button" class="back-btn" onclick="showMyActs()">← Все акты</button></article>`);
