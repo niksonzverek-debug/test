@@ -1072,15 +1072,55 @@ async function showMasterFinance(){
     const fmt = t => new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(Number(t||0)/100);
     const effectiveBalance = Number.isFinite(Number(d.available_tiyin)) ? Number(d.available_tiyin) : Number(d.balance_tiyin||0);
     const labels={admin_credit:'Пополнение администратором',receipt_credit:'Подтверждённый чек',act_commission:'Комиссия за акт',correction:'Корректировка'};
-    const operations=(d.operations||[]).map(o=>`<div class="card"><b>${masterEsc(labels[o.kind]||o.kind)}</b><p>${masterEsc(fmt(o.amount_tiyin))} сум ${o.act_number?'· акт '+masterEsc(o.act_number):''}</p><small>${masterEsc(o.created_at||'')}</small></div>`).join('');
-    const receipts=(d.receipts||[]).map(r=>`<p>${masterEsc(fmt(r.amount_tiyin))} сум — ${masterEsc(({pending:'Ожидает проверки',approved:'Подтверждено',rejected:'Отклонено'})[r.status]||r.status)} ${r.review_note?'('+masterEsc(r.review_note)+')':''}</p>`).join('');
+    const operations=(d.operations||[]).map(o=>`<div class="finance-compact-row"><b>${masterEsc(labels[o.kind]||o.kind)}</b><span>${masterEsc(fmt(o.amount_tiyin))} сум</span><small>${masterEsc(o.created_at||'')}</small></div>`).join('');
+    const receipts=(d.receipts||[]).map(r=>`<div class="finance-compact-row"><b>${masterEsc(fmt(r.amount_tiyin))} сум</b><span>${masterEsc(({pending:'Ожидает проверки',approved:'Подтверждено',rejected:'Отклонено'})[r.status]||r.status)}</span>${r.review_note?`<small>${masterEsc(r.review_note)}</small>`:''}</div>`).join('');
     const paymentUrl = typeof d.payment_url==='string' && /^https:\/\/[^\s]+$/i.test(d.payment_url) ? d.payment_url : '';
-    const paymentLink = paymentUrl ? `<a class="btn master-deposit-pay-link" href="${masterEsc(paymentUrl)}" target="_blank" rel="noopener noreferrer">Перейти к пополнению</a>` : '<p class="subtitle">Ссылка для оплаты пока не настроена администратором.</p>';
-    masterShell('Мой депозит', `<article class="card"><h2>Баланс: ${masterEsc(fmt(effectiveBalance))} сум</h2>${paymentLink}<p>Комиссия: ${masterEsc((Number(d.commission_basis_points)/100).toLocaleString('ru-RU'))}% от суммы выданного акта.</p><p class="subtitle">Пополнение зачисляется только после проверки платежа администратором.</p></article>
-      <article class="card"><h2>Отправить чек пополнения</h2><p>Оплатите пополнение по ссылке выше, затем укажите сумму и прикрепите чек. Средства зачисляются только после подтверждения администратора.</p><form onsubmit="event.preventDefault();submitMasterFinanceReceipt()"><label>Сумма, сум</label><input id="financeAmount" type="number" oninput="masterFinanceSubmissionId=null" min="1000" max="100000000" step="1" required><label for="financeReceipt">Чек JPG или PNG, до 4 МБ</label><label class="master-deposit-file-picker" for="financeReceipt"><span class="master-deposit-file-icon" aria-hidden="true">📎</span><span id="financeReceiptLabel">Выбрать чек</span></label><input id="financeReceipt" class="master-deposit-file-input" type="file" accept="image/jpeg,image/png" required onchange="masterFinanceReceiptSelected(this)"><button type="submit" id="masterFinanceSubmitReceipt">Отправить на проверку</button><p id="financeUploadStatus" role="status"></p></form></article>
-      <article class="card"><h2>Заявки на пополнение</h2>${receipts||'<p>Заявок пока нет.</p>'}</article>
-      <article class="card"><h2>Последние операции</h2>${operations||'<p>Операций пока нет.</p>'}</article>`);
+    const paymentLink = paymentUrl ? `<a class="btn master-deposit-pay-link" href="${masterEsc(paymentUrl)}" target="_blank" rel="noopener noreferrer">💳 Перейти к оплате</a>` : '<p class="subtitle">Ссылка на оплату пока не настроена.</p>';
+    masterShell('Мой депозит', `<style>
+      .finance-compact .card{padding:14px 16px!important;margin:0 0 10px!important}
+      .finance-compact .card h2{margin:0 0 9px!important}
+      .finance-compact .card p{margin:5px 0!important;line-height:1.35!important}
+      .finance-compact .master-deposit-pay-link{display:block;text-align:center;padding:12px 14px;margin:10px 0 6px;text-decoration:none;border-radius:12px;background:linear-gradient(120deg,#147bda,#346ff1);color:white;font-weight:700}
+      .finance-compact form{display:grid;gap:8px}
+      .finance-compact form label{margin:0!important}
+      .finance-compact #financeAmount,.finance-compact .master-deposit-file-picker{margin:0!important;box-sizing:border-box;width:100%}
+      .finance-compact .finance-required-invalid{border:1px solid #ff405e!important;box-shadow:0 0 9px #ff315b8a!important}
+      .finance-compact .finance-required-valid{border:1px solid #29c980!important;box-shadow:0 0 9px #20d18b70!important}
+      .finance-compact #masterFinanceSubmitReceipt.finance-submit-ready{box-shadow:0 0 0 1px #34ef9b,0 0 16px #20d68d!important;border:1px solid #37e5a0!important}
+      .finance-compact #masterFinanceSubmitReceipt.finance-submit-waiting{box-shadow:0 0 0 1px #f34c68,0 0 12px #ff315b70!important;border:1px solid #f34c68!important}
+      .finance-compact .finance-compact-row{display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 8px;padding:7px 0;border-bottom:1px solid #ffffff18}
+      .finance-compact .finance-compact-row small{width:100%;opacity:.7}
+      .finance-compact details summary{cursor:pointer;font-weight:700}
+      .finance-compact details[open] summary{margin-bottom:8px}
+    </style><div class="finance-compact">
+    <article class="card"><h2>Баланс: ${masterEsc(fmt(effectiveBalance))} сум</h2><p class="subtitle" style="color:#ffd38a;font-weight:700">⚠️ После оплаты сохраните скриншот чека — он понадобится для подтверждения пополнения.</p>${paymentLink}<p class="subtitle">Пополнение пока доступно только через приложение Paynet Xolis.</p><p class="subtitle">Комиссия: ${masterEsc((Number(d.commission_basis_points)/100).toLocaleString('ru-RU'))}% за выданный акт. Зачисление после проверки администратором.</p></article>
+    <article class="card"><h2>Отправить чек пополнения</h2><form onsubmit="event.preventDefault();submitMasterFinanceReceipt()">
+      <label for="financeAmount">Сумма, сум</label><input id="financeAmount" type="number" oninput="masterFinanceSubmissionId=null;masterFinanceUpdateValidity()" min="1000" max="100000000" step="1" required>
+      <label for="financeReceipt">Чек JPG/PNG, до 4 МБ</label><label class="master-deposit-file-picker" id="financeReceiptPicker" for="financeReceipt"><span class="master-deposit-file-icon" aria-hidden="true">📎</span><span id="financeReceiptLabel">Выбрать чек</span></label>
+      <input id="financeReceipt" class="master-deposit-file-input" type="file" accept="image/jpeg,image/png" required onchange="masterFinanceReceiptSelected(this)">
+      <button type="submit" id="masterFinanceSubmitReceipt" class="finance-submit-waiting">Отправить на проверку</button><p id="financeUploadStatus" role="status"></p>
+    </form></article>
+    <article class="card"><details ${receipts?'':'open'}><summary>Заявки на пополнение${d.receipts?.length?' ('+d.receipts.length+')':''}</summary>${receipts||'<p class="subtitle">Заявок пока нет.</p>'}</details></article>
+    <article class="card"><details ${operations?'':'open'}><summary>Последние операции${d.operations?.length?' ('+d.operations.length+')':''}</summary>${operations||'<p class="subtitle">Операций пока нет.</p>'}</details></article>
+    </div>`);
+    masterFinanceUpdateValidity();
   }catch(e){masterShell('Мой депозит',`<article class="card"><p class="error">${masterEsc(e.message)}</p><p>Финансовый раздел пока не активирован администратором. Остальные функции мастера работают как раньше.</p></article>`)}
+}
+function masterFinanceUpdateValidity(){
+ const amount=document.getElementById('financeAmount');
+ const picker=document.getElementById('financeReceiptPicker');
+ const button=document.getElementById('masterFinanceSubmitReceipt');
+ const file=document.getElementById('financeReceipt')?.files?.[0];
+ const number=Number(amount?.value);
+ const validAmount=!!amount?.value && Number.isSafeInteger(number) && number>=1000 && number<=100000000;
+ const validFile=!!file && ['image/jpeg','image/png'].includes(file.type) && file.size>0 && file.size<=4*1024*1024;
+ amount?.classList.toggle('finance-required-valid',validAmount);
+ amount?.classList.toggle('finance-required-invalid',!validAmount);
+ picker?.classList.toggle('finance-required-valid',validFile);
+ picker?.classList.toggle('finance-required-invalid',!validFile);
+ button?.classList.toggle('finance-submit-ready',validAmount&&validFile);
+ button?.classList.toggle('finance-submit-waiting',!(validAmount&&validFile));
+ if(button)button.disabled=!(validAmount&&validFile)||masterFinanceReceiptSending;
 }
 function masterFinanceReceiptSelected(input){
   const file=input?.files?.[0];
@@ -1090,6 +1130,7 @@ function masterFinanceReceiptSelected(input){
   if(status)status.textContent='';
   // A different receipt or amount must not reuse the previous request identifier.
   masterFinanceSubmissionId=null;
+  masterFinanceUpdateValidity();
 }
 let masterFinanceReceiptSending = false;
 let masterFinanceSubmissionId = null;
