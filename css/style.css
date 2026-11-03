@@ -1258,3 +1258,26 @@ body:has(.bt-client-home){background-image:radial-gradient(ellipse at 52% 8%,#0b
 #btMapHint{font-size:12px;color:#b3c7df;line-height:1.4;overflow-wrap:anywhere}
 .bt-address-actions button{flex:1}
 .bt-address-actions button:disabled{opacity:.4}
+
+/* PATCH 2026-11-03: visible client pickers and compact order form */
+body.bt-order-page .bt-client-picker.bt-field-empty > summary{
+  border-color:#ff465c!important;
+  box-shadow:0 0 0 1px rgba(255,56,85,.45),0 0 14px rgba(255,35,65,.68)!important;
+}
+body.bt-order-page .bt-client-picker.bt-field-ready > summary{
+  border-color:#39e89c!important;
+  box-shadow:0 0 0 1px rgba(45,235,149,.35),0 0 14px rgba(22,218,119,.6)!important;
+}
+body.bt-order-page .bt-client-picker > summary{transition:border-color .15s,box-shadow .15s}
+body.bt-order-page form.card,body.bt-order-page .card{margin-top:9px!important;margin-bottom:10px!important;padding:13px 12px!important}
+body.bt-order-page .bt-client-picker{margin-bottom:6px!important}
+body.bt-order-page label{margin-top:8px!important;margin-bottom:5px!important}
+body.bt-order-page .bt-map-open{margin-top:9px!important}
+.bt-address-dialog{gap:8px!important;padding:12px!important}
+.bt-map-stage{position:relative;min-height:220px;flex:1;overflow:hidden;border-radius:12px}
+.bt-map-stage #btAddressMap{height:min(47dvh,430px)!important;min-height:220px!important}
+.bt-map-center-pin{position:absolute;z-index:800;left:50%;top:50%;transform:translate(-50%,-100%);pointer-events:none;filter:drop-shadow(0 2px 4px #000a)}
+.bt-map-center-pin span{font-size:40px;line-height:1;display:block}
+.bt-map-style-switch{display:flex;gap:6px}
+.bt-map-style-switch button{flex:1;background:#112c4b!important;border:1px solid #356a9e!important;color:#dcefff!important;box-shadow:none!important}
+.bt-map-style-switch button.bt-map-style-active{background:#145e9f!important;border-color:#6bd5ff!important;box-shadow:0 0 9px #168bff66!important}

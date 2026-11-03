@@ -1325,9 +1325,12 @@ function btClientUpdateSubmitGlow(){
         const el=document.getElementById(id);if(!el)continue;
         const chosen=value(id);
         const ok=Boolean(chosen && (chosen!=='__other__' || value(id+'_custom')));
-        const picker=el.closest('.bt-master-picker,.bt-enhanced-select,.bt-client-picker')||el;
-        picker.classList.toggle('bt-order-green',ok);
-        picker.classList.toggle('bt-order-red',!ok);
+        // Styled <details> is a sibling of the hidden native select.
+        const picker=document.getElementById(id+'StyledPicker');
+        if(picker){
+            picker.classList.toggle('bt-field-ready',ok);
+            picker.classList.toggle('bt-field-empty',!ok);
+        }
     }
 }
 function btClientBindOrderValidation(){
@@ -1672,15 +1675,37 @@ startMasterApplicationAutoSync();
 
 
 // TEST PATCH: embedded address picker. Coordinates are only saved after explicit confirmation.
-let btAddressMapInstance=null,btAddressMapMarker=null,btAddressMapPoint=null,btAddressMapLabel='';
+// TEST PATCH: center-fixed pin map. No coordinates are saved until confirmation.
+let btAddressMapInstance=null,btAddressMapPoint=null,btAddressMapLabel='';
+let btMapLayers=null,btMapStyle='street';
+function btMapUpdateCenter(){
+    if(!btAddressMapInstance)return;
+    const c=btAddressMapInstance.getCenter();
+    btAddressMapPoint={lat:c.lat,lon:c.lng};
+    const hint=document.getElementById('btMapHint');
+    if(hint)hint.textContent=`Точка: ${c.lat.toFixed(6)}, ${c.lng.toFixed(6)} · Перемещайте карту под меткой`;
+    const btn=document.getElementById('btMapConfirm');if(btn)btn.disabled=false;
+}
+function btMapSetLayer(style){
+    if(!btAddressMapInstance||!btMapLayers)return;
+    const next=style==='satellite'?'satellite':'street';
+    if(btMapLayers[btMapStyle])btAddressMapInstance.removeLayer(btMapLayers[btMapStyle]);
+    btMapStyle=next;
+    btMapLayers[next].addTo(btAddressMapInstance);
+    document.querySelectorAll('#btAddressOverlay [data-map-style]').forEach(b=>{
+        b.classList.toggle('bt-map-style-active',b.dataset.mapStyle===next);
+        b.setAttribute('aria-pressed',String(b.dataset.mapStyle===next));
+    });
+}
 async function btOpenAddressMap(){
     if(document.getElementById('btAddressOverlay'))return;
     const overlay=document.createElement('div');overlay.id='btAddressOverlay';overlay.className='bt-address-overlay';
     overlay.innerHTML=`<div class="bt-address-dialog" role="dialog" aria-modal="true" aria-label="Выбор адреса">
-      <div class="bt-address-top"><strong>🗺️ Выберите адрес ремонта</strong><button type="button" onclick="btCloseAddressMap()">✕</button></div>
+      <div class="bt-address-top"><strong>🗺️ Адрес ремонта</strong><button type="button" onclick="btCloseAddressMap()" aria-label="Закрыть">✕</button></div>
       <div class="bt-address-search"><input id="btMapSearch" placeholder="Город, улица, адрес" autocomplete="off"><button type="button" onclick="btSearchAddressMap()">Найти</button></div>
-      <p id="btMapHint">Найдите адрес или нажмите на нужный дом на карте.</p>
-      <div id="btAddressMap"></div>
+      <div class="bt-map-style-switch"><button type="button" data-map-style="street" onclick="btMapSetLayer('street')">Схема</button><button type="button" data-map-style="satellite" onclick="btMapSetLayer('satellite')">Спутник</button></div>
+      <div class="bt-map-stage"><div id="btAddressMap"></div><div class="bt-map-center-pin" aria-hidden="true"><span>📍</span></div></div>
+      <p id="btMapHint">Передвигайте карту, чтобы поставить метку на нужный дом.</p>
       <div class="bt-address-actions"><button type="button" onclick="btCloseAddressMap()">Отмена</button><button type="button" id="btMapConfirm" onclick="btConfirmAddressMap()" disabled>✓ Подтвердить точку</button></div>
     </div>`;
     document.body.appendChild(overlay);
@@ -1693,27 +1718,22 @@ async function btOpenAddressMap(){
         }
         if(!document.getElementById('btAddressOverlay'))return;
         const initial=orderData.location||{lat:41.2995,lon:69.2401};
-        btAddressMapInstance=L.map('btAddressMap').setView([initial.lat,initial.lon],orderData.location?16:12);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(btAddressMapInstance);
-        btAddressMapPoint=null;btAddressMapLabel='';
-        btAddressMapInstance.on('click',e=>btSetMapPoint(e.latlng.lat,e.latlng.lng,''));
-        if(orderData.location)btSetMapPoint(initial.lat,initial.lon,orderData.mapAddress||'');
+        btAddressMapInstance=L.map('btAddressMap',{zoomControl:true}).setView([initial.lat,initial.lon],orderData.location?17:12);
+        btMapLayers={
+            street:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}),
+            satellite:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri and contributors'})
+        };
+        btMapStyle='street';btMapLayers.street.addTo(btAddressMapInstance);
+        btMapSetLayer('street');
+        btAddressMapLabel='';
+        btAddressMapInstance.on('moveend',()=>{btAddressMapLabel='';btMapUpdateCenter();});
+        btMapUpdateCenter();
         setTimeout(()=>btAddressMapInstance?.invalidateSize(),100);
     }catch(e){
         const hint=document.getElementById('btMapHint');
-        if(hint)hint.textContent='Не удалось загрузить карту. Проверьте интернет или используйте геолокацию.';
+        if(hint)hint.textContent='Карта недоступна. Проверьте интернет или отправьте геолокацию.';
         console.warn('Map loading failed',e);
     }
-}
-function btSetMapPoint(lat,lon,label){
-    btAddressMapPoint={lat:Number(lat),lon:Number(lon)};btAddressMapLabel=label||'';
-    if(btAddressMapInstance){
-        if(btAddressMapMarker)btAddressMapMarker.setLatLng([lat,lon]);
-        else btAddressMapMarker=L.marker([lat,lon]).addTo(btAddressMapInstance);
-    }
-    const hint=document.getElementById('btMapHint');
-    if(hint)hint.textContent=label||`Точка: ${Number(lat).toFixed(6)}, ${Number(lon).toFixed(6)}`;
-    const confirm=document.getElementById('btMapConfirm');if(confirm)confirm.disabled=false;
 }
 async function btSearchAddressMap(){
     const query=document.getElementById('btMapSearch')?.value.trim();if(!query)return;
@@ -1723,21 +1743,26 @@ async function btSearchAddressMap(){
         const response=await fetch(url,{headers:{'Accept':'application/json'}});
         if(!response.ok)throw Error('search failed');
         const results=await response.json();
-        if(!results.length){if(hint)hint.textContent='Адрес не найден. Уточните запрос или поставьте точку вручную.';return;}
+        if(!results.length){if(hint)hint.textContent='Адрес не найден. Уточните запрос или передвиньте карту.';return;}
         const place=results[0];
+        btAddressMapLabel=place.display_name||'';
         btAddressMapInstance?.setView([Number(place.lat),Number(place.lon)],17);
-        btSetMapPoint(place.lat,place.lon,place.display_name);
-    }catch(e){if(hint)hint.textContent='Поиск недоступен. Поставьте точку на карте вручную.';}
+        // The center pin stays fixed; the user may adjust it by dragging the map.
+        btMapUpdateCenter();
+    }catch(e){if(hint)hint.textContent='Поиск недоступен. Выберите точку перемещением карты.';}
 }
 function btConfirmAddressMap(){
-    if(!btAddressMapPoint)return;
-    orderData.location={...btAddressMapPoint};orderData.mapAddress=btAddressMapLabel;
+    if(!btAddressMapInstance)return;
+    const center=btAddressMapInstance.getCenter();
+    if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
+    orderData.location={lat:center.lat,lon:center.lng};
+    orderData.mapAddress=btAddressMapLabel||document.getElementById('btMapSearch')?.value.trim()||'';
     const status=document.getElementById('location_status');
-    if(status){status.textContent='✅ Точка на карте подтверждена'+(btAddressMapLabel?': '+btAddressMapLabel:'');status.style.color='#43dba1';}
+    if(status){status.textContent='✅ Точка на карте подтверждена';status.style.color='#43dba1';}
     btCloseAddressMap();btClientUpdateSubmitGlow();
 }
 function btCloseAddressMap(){
     if(btAddressMapInstance){btAddressMapInstance.remove();btAddressMapInstance=null;}
-    btAddressMapMarker=null;btAddressMapPoint=null;
+    btAddressMapPoint=null;btMapLayers=null;
     document.getElementById('btAddressOverlay')?.remove();
 }
