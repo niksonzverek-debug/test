@@ -606,8 +606,17 @@ function btOrderTimeline(o) {
     if (status === 'rejected' || status === 'cancelled') return `<div class="bt-order-stage-note">${escapeClient(btOrderStatusLabels[status])}</div>`;
     return `<div class="bt-status-timeline" aria-label="Этапы заявки">${steps.map(s=>`<span class="${s.done?'done':''}"><i>${s.done?'✓':'·'}</i>${s.label}</span>`).join('')}</div>`;
 }
+function btActiveOrders(rows) {
+    // Only unfinished orders belong to the current-orders screen.
+    const inactive = new Set(['closed', 'completed', 'cancelled', 'canceled', 'rejected']);
+    return (Array.isArray(rows) ? rows : []).filter(o => {
+        const status = String(o?.status || '').toLowerCase();
+        const displayStatus = String(o?.display_status || '').toLowerCase();
+        return !inactive.has(status) && !inactive.has(displayStatus);
+    });
+}
 function btOrderCards(rows) {
-    return rows.length ? rows.map(o => {
+    return btActiveOrders(rows).map(o => {
         const confirmationReady=Boolean(o.can_confirm_act === true);
         const displayStatus=String(o.display_status||o.status||'');
         const label=btOrderStatusLabels[displayStatus]||displayStatus||'Обрабатывается';
@@ -622,23 +631,33 @@ function btOrderCards(rows) {
             <p class="subtitle">Обновлено: ${escapeClient(date||'—')}</p>
             ${o.promocode?`<p>🎟️ Промокод: ${escapeClient(o.promocode)}</p>`:''}
             ${confirmationReady?`<button onclick="confirmClientAct('${escapeClient(o.id)}')">✅ Подтвердить выполнение</button>${deadline}`:''}
-            <button type="button" class="secondary" onclick="btRepeatOrder('${escapeClient(o.id)}')">↻ Повторить заявку</button>
         </article>`;
-    }).join('') : '<div class="card">Заявок пока нет. Создайте первую заявку.</div>';
+    }).join('');
 }
 async function btRefreshOrderCards() {
     if (document.hidden || !document.getElementById('btOrdersList')) return;
     try {
         const result=await clientApi('/api/client/dashboard');
         const list=document.getElementById('btOrdersList');
-        if(list)list.innerHTML=btOrderCards(result.orders||[]);
+        if(list){
+            const wasActive=Boolean(list.querySelector('.bt-order-progress-card'));
+            const activeOrders=btActiveOrders(result.orders||[]);
+            if(wasActive !== Boolean(activeOrders.length)){
+                clearInterval(btOrderProgressTimer);
+                btOrderProgressTimer=null;
+                await showMyOrders();
+                return;
+            }
+            list.innerHTML=btOrderCards(activeOrders);
+        }
     } catch(_) { /* Keep last known status; users may retry manually. */ }
 }
 async function showMyOrders() {
     setPage('📋 Мои заявки', '<p class="subtitle">Загружаем ваши заявки…</p>');
     try {
         const d = await clientApi('/api/client/dashboard');
-        setPage('📋 Мои заявки', `<div class="card"><b>Мастер: ${escapeClient(d.master?.name||'Не назначен')}</b> ${btMasterVerifiedBadge(d.master)}</div><p class="subtitle">Статусы обновляются автоматически каждые 20 секунд.</p><div id="btOrdersList">${btOrderCards(d.orders||[])}</div>`);
+        const activeOrders = btActiveOrders(d.orders||[]);
+        setPage('📋 Мои заявки', `${activeOrders.length ? `<div class="card"><b>Мастер: ${escapeClient(d.master?.name||'Не назначен')}</b> ${btMasterVerifiedBadge(d.master)}</div><p class="subtitle">Статусы обновляются автоматически каждые 20 секунд.</p>` : ''}<div id="btOrdersList">${btOrderCards(activeOrders)}</div>`);
         btOrderProgressTimer=setInterval(btRefreshOrderCards,20000);
     } catch (e) { setPage('📋 Мои заявки', `<div class="card error">${escapeClient(e.message)}</div>`); }
 }
@@ -998,28 +1017,6 @@ function btSaveCurrentAddress(which){
         const status=document.getElementById('btAddressSaveStatus');
         if(status)status.textContent='Адрес сохранён на этом устройстве (без GPS).';
     }catch(_){showAlert('Не удалось сохранить адрес на устройстве.');}
-}
-async function btRepeatOrder(orderId){
-    try{
-        const result=await clientApi('/api/client/dashboard');
-        const previous=(result.orders||[]).find(o=>String(o.id)===String(orderId));
-        if(!previous)throw new Error('Прошлая заявка не найдена.');
-        // Новый идентификатор операции: повторная заявка — самостоятельный заказ.
-        showNewOrder();
-        for(const [field,custom] of [['device','device_custom'],['brand','brand_custom']]){
-            const select=document.getElementById(field),value=String(previous[field]||'');
-            if(!select||!value)continue;
-            const existing=[...select.options].some(option=>option.value===value);
-            select.value=existing?value:'__other__';
-            if(field==='device')onDeviceChange();else onBrandChange();
-            if(!existing){const input=document.getElementById(custom);if(input)input.value=value;}
-        }
-        for(const name of ['problem','house','apartment']){
-            const input=document.getElementById(name);if(input)input.value=String(previous[name]||'');
-        }
-        // Дата и время намеренно новые, прежние промокод и GPS не копируются.
-        showAlert('Данные техники и адрес перенесены. Проверьте дату, время и при необходимости укажите локацию.');
-    }catch(e){showAlert(e.message||'Не удалось повторить заявку.');}
 }
 // ============ НОВАЯ ЗАЯВКА ============
 
