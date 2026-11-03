@@ -382,24 +382,59 @@ function showMasterFAQ(){
     ];
   masterShell('F.A.Q. — Помощь',`<article class="card bt-faq-card"><p class="subtitle">Ответы на частые вопросы о работе в ТехСервис.</p>${items.map(([q,a])=>`<details><summary>${masterEsc(q)}</summary><p>${masterEsc(a)}</p></details>`).join('')}<button type="button" class="secondary" onclick="renderMasterMenu()">← Главная</button></article>`);
 }
-function masterOrderMapUrl(order){
+// Navigation uses confirmed GPS coordinates first; house/apartment remain visible in the order.
+function masterOrderDestination(order){
  const candidates=[order?.location,order?.geo,order?.coordinates,order?.client_location];
  for(const l of candidates){
-   if(!l||typeof l!=='object')continue;
-   const lat=Number(l.lat??l.latitude),lon=Number(l.lon??l.lng??l.longitude);
-   if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180)
-     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat+','+lon)}`;
+  if(!l||typeof l!=='object')continue;
+  const lat=Number(l.lat??l.latitude),lon=Number(l.lon??l.lng??l.longitude);
+  if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180&&!(lat===0&&lon===0))
+   return {lat,lon};
  }
- const address=String(order?.address||order?.house||'').trim();
- if(address&&address!=='📍 Геолокация клиента'&&!/^GPS[: ]/i.test(address))
-   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
- return '';
+ const address=String(order?.address||'').trim();
+ if(address&&address!=='📍 Геолокация клиента'&&!/^GPS[: ]/i.test(address)){
+  const clean=address.replace(/(?:,|\s)\s*(?:кв\.?|квартира|apt\.?|apartment)\s*[^,;]*/ig,'').trim();
+  if(clean)return {address:clean};
+ }
+ return null;
+}
+function masterOrderMapUrl(order){
+ const dest=masterOrderDestination(order);
+ if(!dest)return '';
+ const target=dest.address||`${dest.lat},${dest.lon}`;
+ return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(target)}`;
+}
+function masterNavLink(dest,provider){
+ const point=dest.address||`${dest.lat},${dest.lon}`;
+ if(provider==='yandex')return dest.address?`https://yandex.com/maps/?text=${encodeURIComponent(dest.address)}`:`https://yandex.com/maps/?rtext=~${dest.lat},${dest.lon}&rtt=auto`;
+ if(provider==='2gis')return dest.address?`https://2gis.ru/search/${encodeURIComponent(dest.address)}`:`https://2gis.ru/routeSearch/rsType/car/to/${dest.lon},${dest.lat}`;
+ return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(point)}`;
+}
+function showMasterRoute(orderId){
+ const order=masterCache.orders.find(o=>String(o.id)===String(orderId));
+ const dest=masterOrderDestination(order);
+ if(!dest){masterToast('В заявке нет координат или адреса для маршрута',true);return;}
+ const existing=document.getElementById('btMasterNavChooser');if(existing)existing.remove();
+ const saved=localStorage.getItem('bt_master_preferred_nav')||'';
+ const modal=document.createElement('div');modal.id='btMasterNavChooser';
+ modal.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,6,19,.82);display:flex;align-items:center;justify-content:center;padding:20px';
+ modal.innerHTML=`<div role="dialog" aria-modal="true" aria-label="Выбор навигатора" style="width:min(100%,420px);background:#0b1d33;border:1px solid #3388cf;border-radius:18px;padding:20px;box-shadow:0 0 26px #147dba55;color:#eaf5ff"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:19px">📍 Показать маршрут</b><button type="button" id="btNavClose" class="secondary" style="width:auto">✕</button></div><p style="opacity:.8">Выберите приложение для навигации</p><div style="display:grid;gap:9px"><button type="button" data-nav="google">Google Maps</button><button type="button" data-nav="yandex">Яндекс Карты</button><button type="button" data-nav="2gis">2ГИС</button></div><label style="display:flex;align-items:center;gap:10px;margin-top:16px"><input type="checkbox" id="btNavRemember" ${saved?'checked':''} style="width:18px;height:18px;flex:none"> Запомнить мой выбор</label></div>`;
+ document.body.appendChild(modal);
+ const close=()=>modal.remove();modal.querySelector('#btNavClose').onclick=close;
+ modal.addEventListener('click',e=>{if(e.target===modal)close();});
+ modal.querySelectorAll('[data-nav]').forEach(btn=>btn.addEventListener('click',()=>{
+  const provider=btn.dataset.nav;
+  try{if(modal.querySelector('#btNavRemember').checked)localStorage.setItem('bt_master_preferred_nav',provider);else localStorage.removeItem('bt_master_preferred_nav');}catch(e){}
+  const url=masterNavLink(dest,provider);close();
+  // External HTTPS URLs allow Android to offer installed map applications when supported.
+  window.open(url,'_blank','noopener,noreferrer');
+ }));
 }
 function statusLabel(s){return ({new:'Новая',accepted:'Принята',rejected:'Отклонена',in_progress:'В работе',act_issued:'Акт отправлен',closed:'Закрыта',completed:'Завершена',archived_admin:'Удалена администратором'})[s]||s||'—';}
 async function showMasterOrders(){try{await loadMasterData();}catch(e){return masterShell('Заявки',`<article class="card error">${masterEsc(e.message)}</article>`)}
  const rows=masterCache.orders.map(o=>{
-   const id=masterEsc(o.id),route=masterOrderMapUrl(o);
-   const actions=`${o.status==='new'?`<button onclick="decideMasterOrder('${id}','accept')">✓ Принять</button><button class="secondary" onclick="decideMasterOrder('${id}','reject')">Отклонить</button>`:''}${o.status==='accepted'&&!o.act_number?`<button onclick="showMasterCreateAct('${id}')">📄 Создать акт</button>`:''}${o.client_id?`<button class="secondary" onclick="openMasterChat('${masterEsc(o.client_id)}')">💬 Чат</button>`:''}${o.status==='accepted'&&route?`<a class="secondary menu-btn" target="_blank" rel="noopener noreferrer" href="${masterEsc(route)}">📍 Маршрут</a>`:''}`;
+   const id=masterEsc(o.id),route=masterOrderDestination(o);
+   const actions=`${o.status==='new'?`<button onclick="decideMasterOrder('${id}','accept')">✓ Принять</button><button class="secondary" onclick="decideMasterOrder('${id}','reject')">Отклонить</button>`:''}${o.status==='accepted'&&!o.act_number?`<button onclick="showMasterCreateAct('${id}')">📄 Создать акт</button>`:''}${o.client_id?`<button class="secondary" onclick="openMasterChat('${masterEsc(o.client_id)}')">💬 Чат</button>`:''}${o.status==='accepted'&&route?`<button type="button" class="secondary" onclick="showMasterRoute('${id}')">📍 Показать маршрут</button>`:''}`;
    return `<article class="card order-card bt-order-compact ${o.status==='new'?'bt-new-order':''}"><div class="card-row"><b>${id}</b><span class="status-pill ${o.status==='new'?'status-new':''}">${masterEsc(statusLabel(o.status))}</span></div><div class="bt-order-summary"><strong>${masterEsc([o.device,o.brand,o.model].filter(Boolean).join(' ')||'Ремонт техники')}</strong><span>${masterEsc(o.client_name||'Клиент')}</span></div><p class="subtitle bt-order-short">${masterEsc([o.when_date,o.when_time,o.address||o.house].filter(Boolean).join(' · '))}</p><details class="bt-order-details"><summary>Подробнее о заявке</summary><p><b>Телефон:</b> ${masterEsc(o.client_phone||'—')}</p><p>${masterEsc(o.problem||o.comment||'Описание не указано')}</p>${o.status==='archived_admin'?`<p><b>Причина удаления:</b> ${masterEsc(o.admin_archive_reason||'Не указана')}</p>`:''}</details><div class="button-row bt-order-actions">${actions}</div></article>`;
  }).join('');
  masterShell('Заявки',`<div class="section-heading"><p>Сначала показываются последние заявки. Действия доступны только по заявкам вашего кабинета.</p><select id="orderFilter" onchange="filterMasterOrders()"><option value="all">Все статусы</option><option value="new">Новые</option><option value="accepted">Принятые</option><option value="act_issued">Акт отправлен</option><option value="closed">Закрытые</option><option value="archived_admin">Архив (удалены администратором)</option></select></div><div id="masterOrderList" class="stack-list">${rows||'<article class="card">Заявок пока нет.</article>'}</div>`);}
