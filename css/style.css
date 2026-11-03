@@ -1115,3 +1115,41 @@ body:has(.master-app){background-image:linear-gradient(180deg,rgba(3,13,29,.35),
 @keyframes btMasterLightningB{0%,27%,29%,31%,33%,73%,75%,77%,100%{opacity:0}28%,30%,32%{opacity:.85}74%,76%{opacity:.63}}
 .master-app>.bt-master-header,.master-app>#masterContent,.master-app>.master-bottom-nav{position:relative;z-index:1}
 @media(prefers-reduced-motion:reduce){.master-app::before,.master-app::after{animation:none!important;opacity:.14!important}}
+
+
+/* Master dashboard patch 02: calm background, compact identity/deposit/language card. */
+/* Remove both animated pseudo-element arcs entirely, including reduced-motion fallback. */
+.master-app::before,.master-app::after{content:none!important;display:none!important;animation:none!important;background:none!important}
+/* Override old SVG circuit background and diagonal lines on master pages only. */
+body:has(.master-app){background:#061326!important;background-image:radial-gradient(ellipse at 55% 0%,#10345a 0%,#081a31 45%,#050c1b 100%)!important;background-attachment:fixed!important}
+.master-app .bt-master-header{
+  background:linear-gradient(165deg,#0c3155,#081b31 75%)!important;
+  background-image:linear-gradient(165deg,#0c3155,#081b31 75%)!important;
+  padding:12px 12px 12px!important;
+  padding-right:66px!important;
+  min-height:0!important;
+  gap:7px!important;
+  row-gap:8px!important;
+  align-items:center!important;
+  align-content:start!important;
+}
+.master-app .bt-master-header .bt-header-logo{width:51px!important;height:51px!important;flex:0 0 51px!important}
+.master-app .bt-master-header .bt-header-copy{flex:1 1 0!important;min-width:0!important;gap:3px!important}
+.master-app .bt-master-header .bt-header-name{font-size:clamp(15px,4vw,19px)!important;line-height:1.18!important;max-height:none!important;-webkit-line-clamp:unset!important;line-clamp:unset!important;overflow-wrap:anywhere!important}
+.master-app .bt-master-header .bt-header-role{right:12px!important;top:11px!important;font-size:10px!important;max-width:none!important}
+.master-app .bt-master-header .bt-header-deposit{
+  padding:9px 11px!important;min-height:43px!important;margin:1px 0 0!important;
+  font-size:13px!important;gap:7px!important;
+}
+.master-app .bt-master-header .bt-header-deposit strong{font-size:14px!important}
+/* Language widget stays fully functional, but is no longer floating over Telegram controls. */
+.master-app .bt-master-header .bt-lang-widget{
+  position:absolute!important;top:35px!important;right:12px!important;
+  left:auto!important;z-index:20!important;gap:4px!important;
+}
+.master-app .bt-master-header .bt-lang-current{
+  width:35px!important;height:35px!important;min-width:35px!important;min-height:35px!important;
+  font-size:20px!important;box-shadow:0 0 9px #168bff55!important;
+}
+.master-app .bt-master-header .bt-lang-menu{position:absolute;right:0;top:39px;z-index:30}
+@media(max-width:360px){.master-app .bt-master-header{padding-right:58px!important}.master-app .bt-master-header .bt-header-name{font-size:15px!important}}

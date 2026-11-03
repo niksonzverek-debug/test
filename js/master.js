@@ -166,6 +166,13 @@ function masterShell(title, body) {
      ${home?`<button type="button" class="bt-master-deposit-link bt-header-deposit" onclick="showMasterFinance()" aria-label="Открыть мой депозит"><span>Мой депозит</span><strong id="btMasterHomeDepositValue">Загружаем…</strong><span aria-hidden="true">›</span></button>`:''}
    </header><section id="masterContent">${home?'':`<h1 class="bt-screen-heading">${masterEsc(title)}</h1>`}${body}</section>
    <nav class="master-bottom-nav"><button onclick="renderMasterMenu()"><span>⌂</span><small>Главная</small></button><button id="btMasterOrdersNav" onclick="showMasterOrders()"><span>▤</span><small>Заказы</small></button><button id="btMasterChatsNav" onclick="showMasterMessages()"><span>✉</span><small>Чаты</small></button><button onclick="showMasterProfile()"><span>◎</span><small>Профиль</small></button></nav><p id="masterToast" class="subtitle" role="status"></p></main>`;
+  // Reuse the existing language control; only move it into the master header.
+  // ui-language.js recreates it after document.body.innerHTML is replaced.
+  setTimeout(() => {
+    const header = document.querySelector('.master-app .bt-master-header');
+    const languageWidget = document.getElementById('remontLangToggle');
+    if (header && languageWidget && !header.contains(languageWidget)) header.appendChild(languageWidget);
+  }, 0);
   btUpdateMasterAttention();
   window.scrollTo({top:0,left:0,behavior:'instant'});
 }
