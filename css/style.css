@@ -1149,3 +1149,27 @@ body:has(.master-app){background:#061326!important;background-image:radial-gradi
  .master-app .bt-master-header .bt-header-logo{width:45px!important;height:45px!important}
  .master-app .bt-master-header .bt-header-name{font-size:13px!important}
 }
+
+
+/* PATCH 2026-11-03 — Telegram header clearance and fixed footer overlap.
+   Layout only; original Electric Steel Blue visuals are unchanged. */
+body:has(.master-app), body:has(.bt-client-home) {
+  padding-top: calc(24px + var(--rb-safe-top, env(safe-area-inset-top, 0px))) !important;
+  padding-bottom: calc(156px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+}
+.master-app {
+  padding-top: 12px !important;
+  padding-bottom: calc(156px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+}
+.master-app #masterContent {
+  padding-bottom: calc(156px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+}
+.master-app .master-bottom-nav, .bt-client-bottom-nav {
+  bottom: 0 !important;
+  padding-bottom: calc(8px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px))) !important;
+}
+/* Do not add extra space when Telegram's keyboard hides the bottom navigation. */
+.rb-keyboard-open body:has(.master-app),
+.rb-keyboard-open body:has(.bt-client-home) {
+  padding-bottom: calc(24px + var(--rb-safe-bottom, 0px)) !important;
+}
