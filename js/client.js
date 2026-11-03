@@ -112,7 +112,7 @@ function btUpdateMasterBadge(d){
     if(el)el.innerHTML=btMasterVerifiedBadge(d?.master);
 }
 function showClientMasterReviews(){
- setPage('⭐ Отзывы о мастере','<article class="card" id="btMasterReviewsPanel"><p class="subtitle">Загружаем отзывы…</p></article>');
+ setPage('👨‍🔧 Мой мастер','<article class="card" id="btMasterReviewsPanel"><p class="subtitle">Загружаем отзывы…</p></article>');
  clientApi('/api/client/master-reviews').then(data=>{
    const el=document.getElementById('btMasterReviewsPanel');if(!el)return;
    const avatar=(typeof data.master_avatar==='string'&&data.master_avatar.startsWith('data:image/jpeg;base64,')&&data.master_avatar.length<=180000)?`<img src="${escapeClient(data.master_avatar)}" alt="Фото мастера" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #3a8fff">`:'<div style="width:80px;height:80px;border-radius:50%;display:grid;place-items:center;background:#193956;font-size:32px">👨‍🔧</div>';
@@ -158,7 +158,7 @@ function renderClientMenu() {
             <button class="menu-btn" onclick="showMyOrders()"><span class="emoji bt-line-icon">▤</span><b>Мои заявки</b><small>История</small></button>
             <button class="menu-btn" onclick="showMyActs()"><span class="emoji bt-line-icon">◫</span><b>Мои акты</b><small>Гарантия</small></button>
             <button class="menu-btn" onclick="showEnterPromo()"><span class="emoji bt-line-icon">◇</span><b>Промокоды</b><small>Скидки</small></button>
-            <button class="menu-btn bt-reviews-entry" id="btClientReviewsEntry" type="button" onclick="showClientMasterReviews()" hidden><span class="emoji bt-line-icon">☆</span><b>Отзывы о мастере</b><small>Оценки клиентов</small></button>
+            <button class="menu-btn bt-reviews-entry" id="btClientReviewsEntry" type="button" onclick="showClientMasterReviews()" hidden><span class="emoji bt-line-icon">☆</span><b>Мой мастер</b><small>Профиль и отзывы</small></button>
             <button class="menu-btn bt-referral-entry" id="btClientReferralEntry" type="button" onclick="showClientReferral()" hidden><span class="emoji bt-line-icon">↗</span><b>Пригласить друга</b><small>Рефералы</small></button>
             <button class="menu-btn" onclick="showProfile()"><span class="emoji bt-line-icon">◎</span><b>Профиль</b><small>Мои данные</small></button>
             <button class="menu-btn" onclick="showClientFAQ()"><span class="emoji bt-line-icon">♧</span><b>F.A.Q.</b><small>Помощь</small></button>
@@ -177,6 +177,7 @@ function renderClientMenu() {
           <div id="btAdvertiserSlot"></div><nav class="bt-client-bottom-nav" aria-label="Навигация"><button onclick="renderClientMenu()"><span>⌂</span>Главная</button><button onclick="showMyOrders()"><span>▤</span>Заявки</button><button onclick="btFocusHomeChat()"><span>✉</span>Чат</button><button onclick="showProfile()"><span>♙</span>Профиль</button></nav>
         </main>`;
     btRefreshClientReferralEntry();
+    window.btMountClientLanguage?.();
     btRefreshClientReviewsEntry();
     btStartClientPromoCarousel(btPromoGeneration);
     clientApi('/api/advertiser/dashboard').then(d => {
@@ -557,7 +558,7 @@ async function clientApi(path, method='GET', body=null) {
 let btClientPageBack=()=>renderClientMenu();
 let btClientActPreviewNumber='';
 function btClientRestoreRoute(title){
-    if(title.includes('Отзывы о мастере'))return ()=>showClientMasterReviews();
+    if(title.includes('Мой мастер')||title.includes('Отзывы о мастере'))return ()=>showClientMasterReviews();
     if(title.includes('Пригласить друга'))return ()=>showClientReferral();
     if(title.includes('F.A.Q.'))return ()=>showClientFAQ();
     if(title.includes('Кабинет мастера'))return ()=>showMasterChoice();

@@ -1201,16 +1201,11 @@ body:has(.bt-client-home) > #btLangWidget{
 .bt-client-bottom-nav{bottom:0!important;padding-bottom:calc(8px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px)))!important}
 @media(max-width:360px){.bt-client-home .bt-client-header{padding-right:59px!important}}
 
-
-/* Client profile language button: inside the card, never floating over Telegram UI. */
-.bt-client-home .bt-client-header{position:relative!important;overflow:visible!important;padding-right:66px!important}
-.bt-client-home .bt-client-header #remontLangToggle{
- position:absolute!important;top:12px!important;right:12px!important;bottom:auto!important;left:auto!important;
- margin:0!important;transform:none!important;z-index:100!important;
- display:flex!important;align-items:center!important;justify-content:center!important;
- pointer-events:auto!important;
-}
-.bt-client-home .bt-client-header #remontLangToggle .bt-lang-menu{
- position:absolute!important;right:0!important;left:auto!important;top:44px!important;bottom:auto!important;z-index:101!important;
-}
-@media(max-width:360px){.bt-client-home .bt-client-header{padding-right:60px!important}}
+/* Client dashboard patch 2026-11-03: language dropdown stays INSIDE profile card. */
+.bt-client-home .bt-client-header .bt-lang-widget{position:absolute!important;top:50%!important;right:14px!important;left:auto!important;transform:translateY(-50%)!important;z-index:110!important;pointer-events:auto!important;}
+.bt-client-home .bt-client-header:has(.bt-lang-menu:not([hidden])) .bt-lang-widget{top:15px!important;transform:none!important;}
+.bt-client-home .bt-client-header .bt-lang-menu{position:absolute!important;top:calc(100% + 7px)!important;right:0!important;left:auto!important;min-width:175px!important;max-width:calc(100vw - 60px)!important;z-index:111!important;}
+.bt-client-home .bt-client-header:has(.bt-lang-menu:not([hidden])){padding-bottom:206px!important;}
+/* Remove lightning-shaped lines from client background, retain dark blue gradient. */
+body:has(.bt-client-home){background-image:radial-gradient(ellipse at 52% 8%,#0b3d75 0%,#061a37 42%,#030b1c 100%)!important;background-size:100% 100%!important;}
+.bt-client-home .bt-client-header{background-image:linear-gradient(170deg,#0b335e,#06182e 75%)!important;}
