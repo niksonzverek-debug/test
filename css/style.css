@@ -1173,3 +1173,30 @@ body:has(.master-app), body:has(.bt-client-home) {
 .rb-keyboard-open body:has(.bt-client-home) {
   padding-bottom: calc(24px + var(--rb-safe-bottom, 0px)) !important;
 }
+
+/* PATCH 2026-11-03 — client dashboard: match master safe spacing.
+   Layout only; preserve language switching and Electric Steel Blue styling. */
+body:has(.bt-client-home){
+  padding-top:calc(24px + var(--rb-safe-top, env(safe-area-inset-top, 0px)))!important;
+  padding-bottom:calc(156px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px)))!important;
+}
+.bt-client-home{
+  padding-top:12px!important;
+  padding-bottom:calc(156px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px)))!important;
+}
+/* Keep the language selector visible beside the client profile, not under Telegram controls. */
+.bt-client-home .bt-client-header{position:relative!important;padding-right:66px!important;overflow:visible!important}
+.bt-client-home .bt-client-header .bt-lang-widget{
+  position:absolute!important;top:12px!important;right:12px!important;left:auto!important;
+  z-index:100!important;pointer-events:none;
+}
+.bt-client-home .bt-client-header .bt-lang-widget>*{pointer-events:auto}
+.bt-client-home .bt-client-header .bt-lang-menu{position:absolute!important;right:0!important;top:48px!important;z-index:101!important}
+/* For implementations where the language widget is mounted outside the header. */
+body:has(.bt-client-home) > .bt-lang-widget,
+body:has(.bt-client-home) > #btLangWidget{
+  top:calc(112px + var(--rb-safe-top, env(safe-area-inset-top, 0px)))!important;
+}
+/* Fixed bottom navigation must not conceal the last client tile or card. */
+.bt-client-bottom-nav{bottom:0!important;padding-bottom:calc(8px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px)))!important}
+@media(max-width:360px){.bt-client-home .bt-client-header{padding-right:59px!important}}
