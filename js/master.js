@@ -410,12 +410,39 @@ function masterNavLink(dest,provider){
  if(provider==='2gis')return dest.address?`https://2gis.ru/search/${encodeURIComponent(dest.address)}`:`https://2gis.ru/routeSearch/rsType/car/to/${dest.lon},${dest.lat}`;
  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(point)}`;
 }
+function masterPreferredNavigator(){
+ try{
+  const saved=localStorage.getItem('bt_master_preferred_nav')||'';
+  return ['google','yandex','2gis'].includes(saved)?saved:'';
+ }catch(e){return '';}
+}
+function masterOpenNavigation(dest,provider){
+ const url=masterNavLink(dest,provider);
+ // Called directly in a click handler, so Telegram/Android can open the external link.
+ if(window.Telegram?.WebApp?.openLink){
+  try{window.Telegram.WebApp.openLink(url);return;}catch(e){}
+ }
+ window.open(url,'_blank','noopener,noreferrer');
+}
+function masterSetPreferredNavigator(value){
+ try{
+  if(['google','yandex','2gis'].includes(value))localStorage.setItem('bt_master_preferred_nav',value);
+  else localStorage.removeItem('bt_master_preferred_nav');
+ }catch(e){masterToast('Не удалось сохранить выбор на этом устройстве',true);return;}
+ const status=document.getElementById('masterNavigatorStatus');
+ if(status)status.textContent=value?'Выбор сохранён. Маршрут будет открываться без дополнительного окна.':'При открытии маршрута будет предложен выбор навигатора.';
+}
 function showMasterRoute(orderId){
  const order=masterCache.orders.find(o=>String(o.id)===String(orderId));
  const dest=masterOrderDestination(order);
  if(!dest){masterToast('В заявке нет координат или адреса для маршрута',true);return;}
  const existing=document.getElementById('btMasterNavChooser');if(existing)existing.remove();
- const saved=localStorage.getItem('bt_master_preferred_nav')||'';
+ const saved=masterPreferredNavigator();
+ if(saved){
+  // A saved preference must actually skip the chooser.
+  masterOpenNavigation(dest,saved);
+  return;
+ }
  const modal=document.createElement('div');modal.id='btMasterNavChooser';
  modal.style.cssText='position:fixed;inset:0;z-index:99999;background:rgba(0,6,19,.82);display:flex;align-items:center;justify-content:center;padding:20px';
  modal.innerHTML=`<div role="dialog" aria-modal="true" aria-label="Выбор навигатора" style="width:min(100%,420px);background:#0b1d33;border:1px solid #3388cf;border-radius:18px;padding:20px;box-shadow:0 0 26px #147dba55;color:#eaf5ff"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><b style="font-size:19px">📍 Показать маршрут</b><button type="button" id="btNavClose" class="secondary" style="width:auto">✕</button></div><p style="opacity:.8">Выберите приложение для навигации</p><div style="display:grid;gap:9px"><button type="button" data-nav="google">Google Maps</button><button type="button" data-nav="yandex">Яндекс Карты</button><button type="button" data-nav="2gis">2ГИС</button></div><label style="display:flex;align-items:center;gap:10px;margin-top:16px"><input type="checkbox" id="btNavRemember" ${saved?'checked':''} style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none"><span id="btNavRememberMark" aria-hidden="true" style="display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;flex:none;border:2px solid ${saved?'#22c55e':'#36b6ee'};border-radius:7px;background:${saved?'#137345':'#09172b'};color:#fff;font-size:19px;font-weight:900;box-shadow:0 0 9px ${saved?'#22c55e77':'#36b6ee44'}">${saved?'✓':''}</span> Запомнить мой выбор</label></div>`;
@@ -429,9 +456,8 @@ function showMasterRoute(orderId){
  modal.querySelectorAll('[data-nav]').forEach(btn=>btn.addEventListener('click',()=>{
   const provider=btn.dataset.nav;
   try{if(modal.querySelector('#btNavRemember').checked)localStorage.setItem('bt_master_preferred_nav',provider);else localStorage.removeItem('bt_master_preferred_nav');}catch(e){}
-  const url=masterNavLink(dest,provider);close();
-  // External HTTPS URLs allow Android to offer installed map applications when supported.
-  window.open(url,'_blank','noopener,noreferrer');
+  close();
+  masterOpenNavigation(dest,provider);
  }));
 }
 function statusLabel(s){return ({new:'Новая',accepted:'Принята',rejected:'Отклонена',in_progress:'В работе',act_issued:'Акт отправлен',closed:'Закрыта',completed:'Завершена',archived_admin:'Удалена администратором'})[s]||s||'—';}
@@ -879,6 +905,15 @@ async function showMasterProfile(){
   <article class="card"><h2>🪪 Идентификация личности</h2><p id="identityStatus">Загрузка статуса…</p><button type="button" onclick="showMasterIdentity()">Пройти идентификацию</button></article>
   <form class="stack-list" onsubmit="event.preventDefault();saveMasterSettings()">
   <article class="card"><label for="masterProfileName">Имя мастера</label><input id="masterProfileName" maxlength="100" required value="${masterEsc(p.name||'')}"><label for="masterProfilePhone">Телефон</label><input id="masterProfilePhone" maxlength="40" value="${masterEsc(p.phone||'')}" placeholder="+998…"><label for="masterAbout">О мастере (видно клиентам)</label><textarea id="masterAbout" maxlength="700" rows="4" placeholder="Опыт работы, специализация, подход к ремонту">${masterEsc(p.about||'')}</textarea><label for="masterAvatar">Фото профиля (видно клиентам)</label><div id="masterAvatarPreview">${p.avatar?`<img src="${masterEsc(p.avatar)}" alt="Фото мастера" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`:''}</div><input id="masterAvatar" type="file" accept="image/jpeg,image/png,image/webp" onchange="btPreviewMasterAvatar(this)"><button type="button" class="secondary" onclick="btClearMasterAvatar()">Удалить фото</button></article>
+  <article class="card"><h2>🗺️ Навигатор</h2><p class="subtitle">Выберите, где открывать маршрут к клиенту. Настройка сохраняется на этом устройстве.</p>
+  <label for="masterPreferredNavigator">Приложение для маршрутов</label>
+  <select id="masterPreferredNavigator" onchange="masterSetPreferredNavigator(this.value)">
+    <option value="" ${!masterPreferredNavigator()?'selected':''}>Спрашивать каждый раз</option>
+    <option value="google" ${masterPreferredNavigator()==='google'?'selected':''}>Google Maps</option>
+    <option value="yandex" ${masterPreferredNavigator()==='yandex'?'selected':''}>Яндекс Карты</option>
+    <option value="2gis" ${masterPreferredNavigator()==='2gis'?'selected':''}>2ГИС</option>
+  </select>
+  <p id="masterNavigatorStatus" class="subtitle" role="status">${masterPreferredNavigator()?'Выбор сохранён. Маршрут будет открываться без дополнительного окна.':'При открытии маршрута будет предложен выбор навигатора.'}</p></article>
   <article class="card"><h2>Реферальная программа</h2><p class="subtitle">Рефералы работают отдельно от промокодов. Настройка мастера и разрешение администратора проверяются сервером.</p>
   <label class="toggle-row bt-setting-toggle"><span>Разрешить рефералы моим клиентам</span><input id="masterReferralEnabled" type="checkbox" ${localEnabled?'checked':''} onchange="btSaveMasterToggle(this,'referrals')"></label>
   <p id="masterReferralToggleState" class="subtitle" role="status">${!adminEnabled?'⛔ Администратор отключил программу для всех. Ваша галочка сохраняется, но клиенты не увидят ссылку, пока администратор не включит программу.':localEnabled?'✅ Программа доступна клиентам, привязанным к вам.':'Рефералы выключены — клиенты не увидят кнопку приглашения.'}</p>
