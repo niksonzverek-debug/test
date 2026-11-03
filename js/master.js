@@ -494,8 +494,35 @@ async function showMasterOrders(){try{await loadMasterData();}catch(e){return ma
 }
 function filterMasterOrders(){const f=document.getElementById('orderFilter')?.value||'all';document.querySelectorAll('#masterOrderList .order-card').forEach((el,i)=>{const o=masterCache.orders[i];el.style.display=f==='all'||o?.status===f?'':'none';});}
 async function decideMasterOrder(id,decision){try{const r=await masterApi(`/api/master/orders/${encodeURIComponent(id)}/decision`,'POST',{decision});masterToast(r.message);await showMasterOrders();}catch(e){masterToast(e.message,true);}}
-async function showMasterClients(){try{await loadMasterData();}catch(e){return masterShell('Клиенты',`<article class="card error">${masterEsc(e.message)}</article>`)}const rows=masterCache.clients.map(c=>`<article class="card"><div class="card-row"><b>${masterEsc(c.name||'Клиент')}</b><span class="status-pill">${c.registered?'Зарегистрирован':'Без регистрации'}</span></div><p>${masterEsc(c.phone||'Телефон не указан')}</p><p class="subtitle">${masterEsc(c.public_name||c.registration_no||'')}</p><div class="button-row"><button onclick="openMasterChat('${masterEsc(c.id)}')">💬 Написать</button>${c.phone?`<a class="secondary menu-btn" href="tel:${masterEsc(c.phone)}">📞 Позвонить</a>`:''}</div></article>`).join('');masterShell('Клиенты',`<input id="clientSearch" placeholder="Поиск по имени, телефону" oninput="filterMasterClients()"><div id="masterClientList" class="stack-list">${rows||'<article class="card">Клиентов пока нет.</article>'}</div>`);}
-function filterMasterClients(){const q=(document.getElementById('clientSearch')?.value||'').toLowerCase();document.querySelectorAll('#masterClientList .card').forEach(el=>el.style.display=el.textContent.toLowerCase().includes(q)?'':'none');}
+// Search is intentionally blank until the master supplies a full phone number.
+function btClientPhone(value){let d=String(value||'').replace(/\D/g,'');if(d.length===9)d='998'+d;return d;}
+function btClientWarranty(act){
+ const raw=String(act.guarantee_until||'').trim();
+ if(!raw||raw==='—'||Number(act.guarantee_days)===0)return 'Без гарантии';
+ const m=raw.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+ const until=m?new Date(Number(m[3]),Number(m[2])-1,Number(m[1]),23,59,59):new Date(raw);
+ if(Number.isNaN(until.getTime()))return 'Гарантия: '+raw;
+ const days=Math.max(0,Math.ceil((until.getTime()-Date.now())/86400000));
+ return days>0?'Действует · осталось '+days+' дн.':'Гарантия истекла';
+}
+async function showMasterClients(){
+ masterShell('Поиск клиента',`<article class="card bt-client-search"><label for="btClientPhone">Номер телефона клиента</label><input id="btClientPhone" type="tel" inputmode="tel" autocomplete="off" placeholder="+998 XX XXX XX XX" onkeydown="if(event.key==='Enter'){event.preventDefault();btSearchMasterClient()}"><button type="button" onclick="btSearchMasterClient()">Найти клиента</button><p class="subtitle">Введите полный номер телефона. Список клиентов не отображается.</p></article><div id="btClientSearchResults" aria-live="polite"></div>`);
+}
+async function btSearchMasterClient(){
+ const input=document.getElementById('btClientPhone'),out=document.getElementById('btClientSearchResults');if(!input||!out)return;
+ const wanted=btClientPhone(input.value);if(wanted.length!==12||!wanted.startsWith('998')){out.innerHTML='<article class="card">Введите номер Узбекистана полностью: +998 XX XXX XX XX.</article>';return;}
+ out.innerHTML='<article class="card">Ищем клиента…</article>';
+ try{
+   // Only data scoped to the authenticated master is used; never search global records.
+   await loadMasterData();
+   if(!document.getElementById('btClientSearchResults'))return;
+   const acts=masterCache.acts.filter(a=>btClientPhone(a.client_phone)===wanted&&a.status!=='cancelled');
+   const client=masterCache.clients.find(c=>btClientPhone(c.phone)===wanted);
+   if(!client&&!acts.length){out.innerHTML='<article class="card">Клиент с таким номером не найден.</article>';return;}
+   const rows=acts.map(a=>`<div class="bt-client-repair"><b>${masterEsc([a.device,a.brand,a.model].filter(Boolean).join(' ')||'Бытовая техника')}</b><div>Стоимость: ${masterEsc(fmtPrice(a.final_price??a.price??0))}</div><div>Дата ремонта: ${masterEsc(String(a.created_at||'').slice(0,10)||'—')}</div><div>Гарантия: ${masterEsc(btClientWarranty(a))}</div></div>`).join('');
+   out.innerHTML=`<article class="card bt-client-result"><h2>${masterEsc(client?.name||acts[0]?.client_name||'Клиент')}</h2><p>${masterEsc(input.value)}</p>${rows||'<p class="subtitle">Ремонтов у этого мастера пока нет.</p>'}</article>`;
+ }catch(e){out.innerHTML=`<article class="card error">${masterEsc(e.message)}</article>`;}
+}
 async function showMasterMessages(){
     try{await loadMasterData();}catch(e){return masterShell('Чаты',`<article class="card error">${masterEsc(e.message)}</article>`)}
     const grouped=new Map();
@@ -862,7 +889,7 @@ async function showMasterPromos(){
         <p><b>К выплате:</b> ${money(st.balance_due)}</p>
        </div></details>${Number(st.balance_due)>0 && p.advertiser_linked?`<button type="button" class="bt-payout-action" onclick="showMasterPayout('${masterEsc(p.code)}')">💳 Выплатить рекламодателю · ${money(st.balance_due)}</button>`:''}${!p.active&&p.awaiting_master_activation?`<button type="button" onclick="activateMasterPromo('${masterEsc(p.code)}')">✓ Активировать промокод</button>`:''}</article>`;
   }).join('');
-  masterShell('Промокоды',`<button onclick="showCreateMasterPromo()">＋ Создать промокод</button><div class="stack-list">${rows||'<article class="card">Промокодов пока нет.</article>'}</div>`);
+  masterShell('Промокоды',`<div class="bt-promo-actions"><button type="button" onclick="showCreateMasterPromo()">＋ Создать промокод</button></div><div class="stack-list">${rows||'<p class="bt-promo-empty">Промокодов пока нет.</p>'}</div>`);
 }
 let btMasterPayoutRequestId='';
 async function showMasterPayout(code){
@@ -926,10 +953,10 @@ async function showMasterProfile(){
   const p=masterCache.profile||{},r=p.referral_settings||{};
   const localEnabled=r.master_enabled!==undefined?!!r.master_enabled:(r.enabled!==false);
   const adminEnabled=r.admin_enabled!==false;
-  masterShell('Настройки профиля',`<article class="card settings-intro"><h2>Профиль мастера</h2><p class="subtitle">Переключатели сохраняются сразу после нажатия. Остальные поля сохраняются кнопкой ниже.</p></article>
+  masterShell('Настройки профиля',`<style id="bt-master-profile-tweaks">.bt-identity-status{padding:9px 12px;border-radius:10px;border:1px solid #ef4444;box-shadow:0 0 12px rgba(255,38,55,.45);color:#ffb7bd;font-weight:700}.bt-identity-approved{border-color:#24d57b;box-shadow:0 0 12px rgba(26,220,105,.5);color:#baffd4}.bt-profile-form input:not([type=file]):not([type=checkbox]),.bt-profile-form textarea{border-color:#e64a5e;box-shadow:0 0 9px rgba(238,46,68,.3)}.bt-profile-form .bt-field-filled{border-color:#25c878!important;box-shadow:0 0 9px rgba(37,200,120,.28)!important}.bt-avatar-file-button{display:inline-flex;align-items:center;justify-content:center;padding:13px 18px;border:1px solid #36b8ff;border-radius:12px;background:linear-gradient(125deg,#167bca,#275fe0);color:#fff;font-weight:700;cursor:pointer;margin:8px 0}.bt-avatar-file-input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;overflow:hidden!important}.bt-avatar-file-button:focus-within{outline:2px solid #fff}.bt-client-repair{padding:12px 0;border-top:1px solid #31557d;line-height:1.65}.bt-promo-actions{margin:6px 0 18px}.bt-promo-actions button{width:auto;max-width:100%;padding:12px 18px}.bt-promo-empty{margin:0;padding:12px 4px;color:#a9bed9}</style><article class="card settings-intro"><h2>Профиль мастера</h2><p class="subtitle">Переключатели сохраняются сразу после нажатия. Остальные поля сохраняются кнопкой ниже.</p></article>
   <article class="card"><h2>🪪 Идентификация личности</h2><p id="identityStatus">Загрузка статуса…</p><button type="button" onclick="showMasterIdentity()">Пройти идентификацию</button></article>
-  <form class="stack-list" onsubmit="event.preventDefault();saveMasterSettings()">
-  <article class="card"><label for="masterProfileName">Имя мастера</label><input id="masterProfileName" maxlength="100" required value="${masterEsc(p.name||'')}"><label for="masterProfilePhone">Телефон</label><input id="masterProfilePhone" maxlength="40" value="${masterEsc(p.phone||'')}" placeholder="+998…"><label for="masterAbout">О мастере (видно клиентам)</label><textarea id="masterAbout" maxlength="700" rows="4" placeholder="Опыт работы, специализация, подход к ремонту">${masterEsc(p.about||'')}</textarea><label for="masterPaynetUrl">Ссылка Paynet для оплаты клиентами</label><input id="masterPaynetUrl" type="url" maxlength="2048" placeholder="https://app.paynet.uz/..." value="${masterEsc(p.paynet_url||'')}"><p class="subtitle">Если поле пустое, кнопка оплаты у клиента не отображается.</p><label for="masterAvatar">Фото профиля (видно клиентам)</label><div id="masterAvatarPreview">${p.avatar?`<img src="${masterEsc(p.avatar)}" alt="Фото мастера" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`:''}</div><input id="masterAvatar" type="file" accept="image/jpeg,image/png,image/webp" onchange="btPreviewMasterAvatar(this)"><button type="button" class="secondary" onclick="btClearMasterAvatar()">Удалить фото</button></article>
+  <form class="stack-list bt-profile-form" onsubmit="event.preventDefault();saveMasterSettings()">
+  <article class="card"><label for="masterProfileName">Имя мастера</label><input id="masterProfileName" maxlength="100" required value="${masterEsc(p.name||'')}"><label for="masterProfilePhone">Телефон</label><input id="masterProfilePhone" maxlength="40" value="${masterEsc(p.phone||'')}" placeholder="+998…"><label for="masterAbout">О мастере (видно клиентам)</label><textarea id="masterAbout" maxlength="700" rows="4" placeholder="Опыт работы, специализация, подход к ремонту">${masterEsc(p.about||'')}</textarea><label for="masterAvatar">Фото профиля (видно клиентам)</label><div id="masterAvatarPreview">${p.avatar?`<img src="${masterEsc(p.avatar)}" alt="Фото мастера" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`:''}</div><label for="masterAvatar" class="bt-avatar-file-button">📷 Выбрать фото профиля</label><input id="masterAvatar" class="bt-avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp" onchange="btPreviewMasterAvatar(this)"><p id="btAvatarFileName" class="subtitle">JPG, PNG или WebP · до 4 МБ</p><button type="button" class="secondary" onclick="btClearMasterAvatar()">Удалить фото</button></article>
   <article class="card"><h2>🗺️ Навигатор</h2><p class="subtitle">Выберите, где открывать маршрут к клиенту. Настройка сохраняется на этом устройстве.</p>
   <label for="masterPreferredNavigator">Приложение для маршрутов</label>
   <select id="masterPreferredNavigator" onchange="masterSetPreferredNavigator(this.value)">
@@ -946,7 +973,14 @@ async function showMasterProfile(){
   <label>Вознаграждение пригласившему, %</label><input id="masterReferralReward" type="number" min="0" max="100" step="0.5" value="${Number(r.referrer_reward_percent??5)}">
   <label>Приглашений в одной партии</label><input id="masterReferralInvites" type="number" min="1" max="100" step="1" value="${Number(r.invites_per_batch??10)}">
   </article><article class="card"><button id="masterSettingsSave" type="submit">Сохранить остальные настройки</button><p id="masterSettingsStatus" class="subtitle" role="status"></p></article></form>
-  <button class="bt-master-support-entry" type="button" onclick="showMasterSupport()">💬 Написать в поддержку</button>`);masterIdentityStatus();
+  <button class="bt-master-support-entry" type="button" onclick="showMasterSupport()">💬 Написать в поддержку</button>`);masterIdentityStatus();btProfileMarkFields();
+}
+function btProfileMarkFields(){
+ const form=document.querySelector('.bt-profile-form');if(!form)return;
+ for(const field of form.querySelectorAll('input:not([type=file]):not([type=checkbox]),textarea')){
+  const update=()=>field.classList.toggle('bt-field-filled',String(field.value||'').trim().length>0);
+  update();field.addEventListener('input',update);
+ }
 }
 function btIdentityFileChosen(input){
  const file=input.files?.[0],label=document.getElementById(input.id+'Label'),preview=document.getElementById(input.id+'Preview');
@@ -959,7 +993,17 @@ async function showMasterIdentity(){
   document.querySelector('.bt-identity-card')?.scrollIntoView({block:'start'});
 }
 async function submitMasterIdentity(){const btn=document.getElementById('identitySend'),msg=document.getElementById('identityMessage');btn.disabled=true;try{const image=async id=>{const f=document.getElementById(id).files[0];if(!f)return null;if(!['image/jpeg','image/png'].includes(f.type)||f.size>4*1024*1024)throw Error('JPG/PNG до 4 МБ');return await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Ошибка файла'));reader.readAsDataURL(f)})};const payload={full_name:document.getElementById('identityName').value,consent:document.getElementById('identityConsent').checked,front:await image('identityFront'),back:await image('identityBack'),selfie:await image('identitySelfie')};const r=await masterApi('/api/master/identity','POST',payload);msg.textContent=r.message;setTimeout(showMasterProfile,900)}catch(e){msg.textContent=e.message;btn.disabled=false}}
-async function masterIdentityStatus(){try{const r=await masterApi('/api/master/identity');const el=document.getElementById('identityStatus');if(el)el.textContent=({unverified:'Не проверен',pending:'На проверке',approved:'✅ Личность проверена',rejected:'Отклонено — '+(r.review_note||'')})[r.status]||r.status}catch(e){const el=document.getElementById('identityStatus');if(el)el.textContent='Статус временно недоступен. Проверьте подключение сервера и установку cryptography. ('+e.message+')'}}
+async function masterIdentityStatus(){
+ const el=document.getElementById('identityStatus');if(!el)return;
+ try{
+  const r=await masterApi('/api/master/identity');if(!document.getElementById('identityStatus'))return;
+  const status=String(r.status||'unverified').toLowerCase();
+  const labels={unverified:'Не проверена',pending:'На проверке у администратора',approved:'Личность проверена администратором',rejected:'Требуется повторная проверка'};
+  el.textContent=labels[status]||'Статус не определён';
+  el.className='bt-identity-status '+(status==='approved'?'bt-identity-approved':'bt-identity-unverified');
+  const btn=el.parentElement?.querySelector('button');if(btn&&status==='approved'){btn.style.display='none';}
+ }catch(e){el.textContent='Не удалось получить статус проверки';el.className='bt-identity-status bt-identity-unverified';}
+}
 async function btSaveMasterToggle(el,kind){
   const old=!el.checked,desired=!!el.checked;
   const status=document.getElementById('masterReferralToggleState');
@@ -977,9 +1021,9 @@ async function btSaveMasterToggle(el,kind){
     if(status){status.textContent='Не удалось сохранить: '+e.message;status.className='error'}
   }finally{el.disabled=false}
 }
-function btClearMasterAvatar(){window.btMasterAvatarDraft='';document.getElementById('masterAvatarPreview').replaceChildren();const inp=document.getElementById('masterAvatar');if(inp)inp.value='';}
+function btClearMasterAvatar(){const label=document.getElementById('btAvatarFileName');if(label)label.textContent='Фото будет удалено после сохранения настроек.';window.btMasterAvatarDraft='';document.getElementById('masterAvatarPreview').replaceChildren();const inp=document.getElementById('masterAvatar');if(inp)inp.value='';}
 async function btPreviewMasterAvatar(input){
- const file=input.files?.[0];if(!file)return;
+ const file=input.files?.[0];if(!file)return;const label=document.getElementById('btAvatarFileName');if(label)label.textContent=file.name;
  if(!['image/jpeg','image/png','image/webp'].includes(file.type)||file.size>4*1024*1024){masterToast('Фото: JPG, PNG или WebP до 4 МБ',true);return;}
  try{
   const bitmap=await createImageBitmap(file),c=document.createElement('canvas');c.width=256;c.height=256;
@@ -995,7 +1039,7 @@ async function saveMasterSettings(){
   const btn=document.getElementById('masterSettingsSave'),st=document.getElementById('masterSettingsStatus');
   if(!btn||!st)return;
   btn.disabled=true;st.textContent='Сохраняем…';st.className='subtitle';
-  const data={name:document.getElementById('masterProfileName').value.trim(),phone:document.getElementById('masterProfilePhone').value.trim(),about:document.getElementById('masterAbout').value.trim(),paynet_url:document.getElementById('masterPaynetUrl').value.trim(),referral_settings:{new_client_discount_percent:Number(document.getElementById('masterReferralDiscount').value),referrer_reward_percent:Number(document.getElementById('masterReferralReward').value),invites_per_batch:Number(document.getElementById('masterReferralInvites').value)}};
+  const data={name:document.getElementById('masterProfileName').value.trim(),phone:document.getElementById('masterProfilePhone').value.trim(),about:document.getElementById('masterAbout').value.trim(),referral_settings:{new_client_discount_percent:Number(document.getElementById('masterReferralDiscount').value),referrer_reward_percent:Number(document.getElementById('masterReferralReward').value),invites_per_batch:Number(document.getElementById('masterReferralInvites').value)}};
   try{
     if(window.btMasterAvatarDraft!==undefined)data.avatar=window.btMasterAvatarDraft;
     const r=await masterApi('/api/master/settings','POST',data);
