@@ -163,6 +163,7 @@ function masterShell(title, body) {
      <img class="bt-header-logo" src="img/remont-bt-icon.png" alt="ТехСервис">
      <div class="bt-header-copy"><span class="bt-header-hello">Здравствуйте!</span><strong class="bt-header-name">${masterEsc(name)}</strong></div>
      <span class="bt-header-role">🧰 <span>Мастер</span></span>
+     ${home?`<button type="button" class="bt-master-deposit-link bt-header-deposit" onclick="showMasterFinance()" aria-label="Открыть мой депозит"><span>Мой депозит</span><strong id="btMasterHomeDepositValue">Загружаем…</strong><span aria-hidden="true">›</span></button>`:''}
    </header><section id="masterContent">${home?'':`<h1 class="bt-screen-heading">${masterEsc(title)}</h1>`}${body}</section>
    <nav class="master-bottom-nav"><button onclick="renderMasterMenu()"><span>⌂</span><small>Главная</small></button><button id="btMasterOrdersNav" onclick="showMasterOrders()"><span>▤</span><small>Заказы</small></button><button id="btMasterChatsNav" onclick="showMasterMessages()"><span>✉</span><small>Чаты</small></button><button onclick="showMasterProfile()"><span>◎</span><small>Профиль</small></button></nav><p id="masterToast" class="subtitle" role="status"></p></main>`;
   btUpdateMasterAttention();
@@ -330,7 +331,6 @@ async function renderMasterMenu() {
   try { await loadMasterData(); } catch(e) { masterShell('Панель мастера',`<article class="card error">${masterEsc(e.message)}</article>`); return; }
   const s=masterCache.stats||{};
   masterShell('Панель мастера',`${btMasterOldOrders().length?`<div class="card bt-overdue-orders"><b>⚠ Заявки ожидают более двух часов: ${btMasterOldOrders().length}</b><p class="subtitle">Проверьте очередь новых обращений.</p><button type="button" onclick="showMasterOrders()">Открыть ожидающие заявки</button></div>`:''}
-  <button type="button" class="bt-master-deposit-link" onclick="showMasterFinance()" aria-label="Открыть мой депозит"><span>Мой депозит</span><strong id="btMasterHomeDepositValue">Загружаем…</strong><span aria-hidden="true">›</span></button>
   <button class="bt-master-new-orders ${Number(s.new_orders)>0?'bt-attention-urgent':''}" onclick="showMasterOrders()"><span><b>⚡ Новые заявки</b><small>Ожидают принятия</small></span><span class="count-bubble">${s.new_orders||0}</span></button>
   <button id="btMasterHomeCreateAct" class="bt-master-primary bt-red-action" onclick="showCreateAct()">＋ Создать акт</button>
   <div class="master-action-grid bt-master-feature-grid bt-six-tiles">
