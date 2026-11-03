@@ -1153,3 +1153,25 @@ body:has(.master-app){background:#061326!important;background-image:radial-gradi
 }
 .master-app .bt-master-header .bt-lang-menu{position:absolute;right:0;top:39px;z-index:30}
 @media(max-width:360px){.master-app .bt-master-header{padding-right:58px!important}.master-app .bt-master-header .bt-header-name{font-size:15px!important}}
+
+/* Master header layout — user-approved visual editor settings (2026-11-03). */
+/* Preserve Telegram chrome clearance on .master-app; only adjust the header itself. */
+.master-app .bt-master-header{
+  margin-top:9px!important;
+  padding:5px!important;
+  padding-right:66px!important; /* room for language switch */
+  gap:10px!important;
+  border-radius:14px!important;
+  min-height:0!important;
+}
+.master-app .bt-master-header .bt-header-logo{
+  width:85px!important;height:85px!important;
+  flex:0 0 85px!important;
+}
+.master-app .bt-master-header .bt-header-name{
+  font-size:18px!important;line-height:1.2!important;
+}
+.master-app .bt-master-header .bt-header-deposit{
+  padding:20px 11px!important;
+}
+/* End user-approved layout. */
