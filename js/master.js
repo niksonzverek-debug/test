@@ -1095,7 +1095,7 @@ async function showMasterFinance(){
     </style><div class="finance-compact">
     <article class="card"><h2>Баланс: ${masterEsc(fmt(effectiveBalance))} сум</h2><p class="subtitle" style="color:#ffd38a;font-weight:700">⚠️ После оплаты сохраните скриншот чека — он понадобится для подтверждения пополнения.</p>${paymentLink}<p class="subtitle">Пополнение пока доступно только через приложение Paynet Xolis.</p><p class="subtitle">Комиссия: ${masterEsc((Number(d.commission_basis_points)/100).toLocaleString('ru-RU'))}% за выданный акт. Зачисление после проверки администратором.</p></article>
     <article class="card"><h2>Отправить чек пополнения</h2><form onsubmit="event.preventDefault();submitMasterFinanceReceipt()">
-      <label for="financeAmount">Сумма, сум</label><input id="financeAmount" type="number" oninput="masterFinanceSubmissionId=null;masterFinanceUpdateValidity()" min="1000" max="100000000" step="1" required>
+      <label for="financeAmount">Сумма, сум</label><input id="financeAmount" type="text" inputmode="numeric" autocomplete="off" placeholder="Например: 100 000" oninput="masterFinanceSubmissionId=null;masterFinanceFormatAmount(this);masterFinanceUpdateValidity()" required>
       <label for="financeReceipt">Чек JPG/PNG, до 4 МБ</label><label class="master-deposit-file-picker" id="financeReceiptPicker" for="financeReceipt"><span class="master-deposit-file-icon" aria-hidden="true">📎</span><span id="financeReceiptLabel">Выбрать чек</span></label>
       <input id="financeReceipt" class="master-deposit-file-input" type="file" accept="image/jpeg,image/png" required onchange="masterFinanceReceiptSelected(this)">
       <button type="submit" id="masterFinanceSubmitReceipt" class="finance-submit-waiting">Отправить на проверку</button><p id="financeUploadStatus" role="status"></p>
@@ -1106,12 +1106,30 @@ async function showMasterFinance(){
     masterFinanceUpdateValidity();
   }catch(e){masterShell('Мой депозит',`<article class="card"><p class="error">${masterEsc(e.message)}</p><p>Финансовый раздел пока не активирован администратором. Остальные функции мастера работают как раньше.</p></article>`)}
 }
+function masterFinanceAmountNumber(value){
+ const digits=String(value||'').replace(/\D/g,'');
+ return digits ? Number(digits) : NaN;
+}
+function masterFinanceFormatAmount(input){
+ if(!input)return;
+ const previous=input.value;
+ const cursor=input.selectionStart??previous.length;
+ const digitsBefore=previous.slice(0,cursor).replace(/\D/g,'').length;
+ const digits=previous.replace(/\D/g,'').slice(0,9);
+ const formatted=digits.replace(/\B(?=(\d{3})+(?!\d))/g,' ');
+ input.value=formatted;
+ if(typeof input.setSelectionRange==='function'){
+  let position=0,seen=0;
+  while(position<formatted.length && seen<digitsBefore){if(/\d/.test(formatted[position]))seen++;position++;}
+  try{input.setSelectionRange(position,position)}catch(e){}
+ }
+}
 function masterFinanceUpdateValidity(){
  const amount=document.getElementById('financeAmount');
  const picker=document.getElementById('financeReceiptPicker');
  const button=document.getElementById('masterFinanceSubmitReceipt');
  const file=document.getElementById('financeReceipt')?.files?.[0];
- const number=Number(amount?.value);
+ const number=masterFinanceAmountNumber(amount?.value);
  const validAmount=!!amount?.value && Number.isSafeInteger(number) && number>=1000 && number<=100000000;
  const validFile=!!file && ['image/jpeg','image/png'].includes(file.type) && file.size>0 && file.size<=4*1024*1024;
  amount?.classList.toggle('finance-required-valid',validAmount);
@@ -1138,8 +1156,8 @@ async function submitMasterFinanceReceipt(){
   if(masterFinanceReceiptSending)return;
   const status=document.getElementById('financeUploadStatus');
   const file=document.getElementById('financeReceipt')?.files?.[0];
-  const amount=document.getElementById('financeAmount')?.value;
-  const amountNumber=Number(amount);
+  const amountText=document.getElementById('financeAmount')?.value;
+  const amountNumber=masterFinanceAmountNumber(amountText);
   if(!Number.isSafeInteger(amountNumber)||amountNumber<1000||amountNumber>100000000){if(status)status.textContent='Укажите сумму от 1 000 до 100 000 000 сум.';return;}
   if(!file||!['image/jpeg','image/png'].includes(file.type)||file.size===0||file.size>4*1024*1024){if(status)status.textContent='Нужен JPG или PNG до 4 МБ.';return;}
   masterFinanceSubmissionId ||= (globalThis.crypto?.randomUUID?.() || 'receipt-'+Date.now()+'-'+Math.random().toString(36).slice(2));
@@ -1149,7 +1167,7 @@ async function submitMasterFinanceReceipt(){
   if(status)status.textContent='Отправляем чек…';
   try{
     const image=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Ошибка чтения чека'));reader.readAsDataURL(file)});
-    await masterApi('/api/master/finance/receipt','POST',{amount,image,submission_id:masterFinanceSubmissionId});
+    await masterApi('/api/master/finance/receipt','POST',{amount:String(amountNumber),image,submission_id:masterFinanceSubmissionId});
     masterFinanceSubmissionId=null;
     await showMasterFinance();masterToast('Чек отправлен на проверку.');
   }catch(e){if(status)status.textContent=e.message;}
