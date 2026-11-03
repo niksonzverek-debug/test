@@ -1146,8 +1146,9 @@ function showNewOrder() {
 
         <div class="card">
             <label for="house">Адрес ремонта</label>
-            <div class="bt-client-address-row"><div><label for="house">Дом / улица</label><input id="house" maxlength="120" placeholder="Ташкент, Навои, 15" autocomplete="street-address" oninput="btClientManualAddressChanged()"></div><div><label for="apartment">Кв.</label><input id="apartment" maxlength="80" placeholder="42" autocomplete="off"></div></div>
-            <p class="subtitle">Введите адрес вручную или отправьте текущую локацию. Если Вы не дома, просто укажите адрес ремонта.</p>
+            <div class="bt-client-address-row"><div><label for="house">Дом</label><input id="house" maxlength="40" placeholder="15" autocomplete="off" oninput="btClientManualAddressChanged()"></div><div><label for="apartment">Кв.</label><input id="apartment" maxlength="80" placeholder="42" autocomplete="off"></div></div>
+            <p class="subtitle">Укажите дом и квартиру. Адрес найдите на карте или отправьте текущую локацию.</p>
+            <button type="button" onclick="btOpenAddressMap()" class="bt-map-open">🗺️ Выбрать на карте</button>
             <button onclick="sendLocation()" style="margin-top:14px;padding:14px;font-size:16px;background:#f0f0f0;border:1px solid #ddd;border-radius:10px;width:100%;cursor:pointer;">
                 📍 Отправить мою локацию
             </button>
@@ -1166,6 +1167,8 @@ function showNewOrder() {
 
         <button id="submit" class="bt-client-submit bt-client-submit-glow bt-field-empty" onclick="submitOrder()">📤 Отправить заявку</button>
     ` + btClientBottomNav();
+    orderData.location=null;
+    orderData.mapAddress='';
     btEnhanceClientOrderPickers();
     btClientBindOrderValidation();
 
@@ -1291,19 +1294,18 @@ function onBrandChange() {
 // Ручной адрес имеет приоритет: GPS телефона не должен указывать на работу,
 // если клиент вручную вводит адрес дома.
 function btClientManualAddressChanged(){
-    orderData.location=null;
     btClientUpdateSubmitGlow();
     const status=document.getElementById('location_status');
-    if(status)status.textContent='Используется адрес, введённый вручную (без GPS).';
+    if(status && !orderData.location)status.textContent='Укажите адрес на карте или отправьте геолокацию.';
 }
 function btClientLocationSelected(lat,lon){
     orderData.location={lat:Number(lat),lon:Number(lon)};
+    orderData.mapAddress='';
     btClientUpdateSubmitGlow();
     // Не смешиваем адрес предыдущей заявки с новой точкой GPS.
     const house=document.getElementById('house');
     const apartment=document.getElementById('apartment');
-    if(house)house.value='';
-    if(apartment)apartment.value='';
+    // Номер дома и квартира остаются: GPS определяет точку, не квартиру.
     btClientUpdateSubmitGlow();
 }
 
@@ -1317,8 +1319,16 @@ function btClientUpdateSubmitGlow(){
     const nameOk=!identity||identity.style.display==='none'||value('client_name').length>=2;
     const loc=orderData.location;
     const gpsOk=loc&&Number.isFinite(Number(loc.lat))&&Number.isFinite(Number(loc.lon));
-    const ready=Boolean(nameOk&&device&&brand&&value('problem').length>=5&&value('when_date')&&value('when_time')&&(value('house')||gpsOk));
+    const ready=Boolean(nameOk&&device&&brand&&value('problem').length>=5&&value('when_date')&&value('when_time')&&gpsOk);
     btn.classList.toggle('bt-field-ready',ready);btn.classList.toggle('bt-field-empty',!ready);
+    for(const id of ['device','brand','when_date','when_time']){
+        const el=document.getElementById(id);if(!el)continue;
+        const chosen=value(id);
+        const ok=Boolean(chosen && (chosen!=='__other__' || value(id+'_custom')));
+        const picker=el.closest('.bt-master-picker,.bt-enhanced-select,.bt-client-picker')||el;
+        picker.classList.toggle('bt-order-green',ok);
+        picker.classList.toggle('bt-order-red',!ok);
+    }
 }
 function btClientBindOrderValidation(){
     const form=document.getElementById('submit')?.parentElement;if(!form)return;
@@ -1470,7 +1480,7 @@ async function submitOrder() {
 
     if (!when_date) return showAlert('Выберите дату');
     if (!when_time) return showAlert('Выберите время');
-    if (!house && !orderData.location) return showAlert('Укажите адрес выезда или отправьте геолокацию');
+    if (!orderData.location) return showAlert('Выберите точку на карте или отправьте геолокацию');
 
     try {
         localStorage.setItem('remont_bt_house', house);
@@ -1499,11 +1509,11 @@ async function submitOrder() {
         problem: problem,
         when_date: when_date,
         when_time: when_time,
-        house: house,
+        house: [orderData.mapAddress,house && ('дом '+house)].filter(Boolean).join(', ') || (house ? 'дом '+house : ''),
         apartment: apartment,
         comment: comment,
         promo_code: order_promo_code,
-        location: house ? null : (orderData.location || null),
+        location: orderData.location || null,
     };
 
     // Даже если клиент не нажал «Проверить», сервер проверит и привяжет активный код
@@ -1659,3 +1669,75 @@ startMasterApplicationAutoSync();
   function start(){observer.observe(document.body,{childList:true,subtree:true});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
+
+
+// TEST PATCH: embedded address picker. Coordinates are only saved after explicit confirmation.
+let btAddressMapInstance=null,btAddressMapMarker=null,btAddressMapPoint=null,btAddressMapLabel='';
+async function btOpenAddressMap(){
+    if(document.getElementById('btAddressOverlay'))return;
+    const overlay=document.createElement('div');overlay.id='btAddressOverlay';overlay.className='bt-address-overlay';
+    overlay.innerHTML=`<div class="bt-address-dialog" role="dialog" aria-modal="true" aria-label="Выбор адреса">
+      <div class="bt-address-top"><strong>🗺️ Выберите адрес ремонта</strong><button type="button" onclick="btCloseAddressMap()">✕</button></div>
+      <div class="bt-address-search"><input id="btMapSearch" placeholder="Город, улица, адрес" autocomplete="off"><button type="button" onclick="btSearchAddressMap()">Найти</button></div>
+      <p id="btMapHint">Найдите адрес или нажмите на нужный дом на карте.</p>
+      <div id="btAddressMap"></div>
+      <div class="bt-address-actions"><button type="button" onclick="btCloseAddressMap()">Отмена</button><button type="button" id="btMapConfirm" onclick="btConfirmAddressMap()" disabled>✓ Подтвердить точку</button></div>
+    </div>`;
+    document.body.appendChild(overlay);
+    try{
+        if(!window.L){
+            await new Promise((resolve,reject)=>{
+                const css=document.createElement('link');css.rel='stylesheet';css.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(css);
+                const js=document.createElement('script');js.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';js.onload=resolve;js.onerror=reject;document.head.appendChild(js);
+            });
+        }
+        if(!document.getElementById('btAddressOverlay'))return;
+        const initial=orderData.location||{lat:41.2995,lon:69.2401};
+        btAddressMapInstance=L.map('btAddressMap').setView([initial.lat,initial.lon],orderData.location?16:12);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(btAddressMapInstance);
+        btAddressMapPoint=null;btAddressMapLabel='';
+        btAddressMapInstance.on('click',e=>btSetMapPoint(e.latlng.lat,e.latlng.lng,''));
+        if(orderData.location)btSetMapPoint(initial.lat,initial.lon,orderData.mapAddress||'');
+        setTimeout(()=>btAddressMapInstance?.invalidateSize(),100);
+    }catch(e){
+        const hint=document.getElementById('btMapHint');
+        if(hint)hint.textContent='Не удалось загрузить карту. Проверьте интернет или используйте геолокацию.';
+        console.warn('Map loading failed',e);
+    }
+}
+function btSetMapPoint(lat,lon,label){
+    btAddressMapPoint={lat:Number(lat),lon:Number(lon)};btAddressMapLabel=label||'';
+    if(btAddressMapInstance){
+        if(btAddressMapMarker)btAddressMapMarker.setLatLng([lat,lon]);
+        else btAddressMapMarker=L.marker([lat,lon]).addTo(btAddressMapInstance);
+    }
+    const hint=document.getElementById('btMapHint');
+    if(hint)hint.textContent=label||`Точка: ${Number(lat).toFixed(6)}, ${Number(lon).toFixed(6)}`;
+    const confirm=document.getElementById('btMapConfirm');if(confirm)confirm.disabled=false;
+}
+async function btSearchAddressMap(){
+    const query=document.getElementById('btMapSearch')?.value.trim();if(!query)return;
+    const hint=document.getElementById('btMapHint');if(hint)hint.textContent='Ищем адрес…';
+    try{
+        const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=uz&q='+encodeURIComponent(query);
+        const response=await fetch(url,{headers:{'Accept':'application/json'}});
+        if(!response.ok)throw Error('search failed');
+        const results=await response.json();
+        if(!results.length){if(hint)hint.textContent='Адрес не найден. Уточните запрос или поставьте точку вручную.';return;}
+        const place=results[0];
+        btAddressMapInstance?.setView([Number(place.lat),Number(place.lon)],17);
+        btSetMapPoint(place.lat,place.lon,place.display_name);
+    }catch(e){if(hint)hint.textContent='Поиск недоступен. Поставьте точку на карте вручную.';}
+}
+function btConfirmAddressMap(){
+    if(!btAddressMapPoint)return;
+    orderData.location={...btAddressMapPoint};orderData.mapAddress=btAddressMapLabel;
+    const status=document.getElementById('location_status');
+    if(status){status.textContent='✅ Точка на карте подтверждена'+(btAddressMapLabel?': '+btAddressMapLabel:'');status.style.color='#43dba1';}
+    btCloseAddressMap();btClientUpdateSubmitGlow();
+}
+function btCloseAddressMap(){
+    if(btAddressMapInstance){btAddressMapInstance.remove();btAddressMapInstance=null;}
+    btAddressMapMarker=null;btAddressMapPoint=null;
+    document.getElementById('btAddressOverlay')?.remove();
+}

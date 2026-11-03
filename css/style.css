@@ -1241,3 +1241,20 @@ body:has(.bt-client-home){background-image:radial-gradient(ellipse at 52% 8%,#0b
 .bt-client-act-detail h2{font-size:19px;overflow-wrap:anywhere}
 .bt-client-act-detail-status{color:#8bd3ff!important;font-weight:700}
 .bt-client-act-detail>button{display:block;width:100%;margin:10px 0 0}
+
+/* TEST PATCH 2026-11-03: order field feedback and embedded address map */
+.bt-order-page .bt-order-green, .bt-order-page .bt-order-green summary,
+.bt-order-page select.bt-order-green{border-color:#36e993!important;box-shadow:0 0 0 1px #36e99377,0 0 16px #25df8880!important}
+.bt-order-page .bt-order-red, .bt-order-page .bt-order-red summary,
+.bt-order-page select.bt-order-red{border-color:#ff405d!important;box-shadow:0 0 0 1px #ff405d77,0 0 15px #ff405d80!important}
+.bt-order-page .bt-client-address-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
+.bt-map-open{display:block;width:100%;margin-top:12px;padding:14px!important;background:#104d88!important;border:1px solid #49bfff!important;color:white!important}
+.bt-address-overlay{position:fixed;inset:0;z-index:99999;background:#030a17ed;display:flex;align-items:center;justify-content:center;padding:12px}
+.bt-address-dialog{display:flex;flex-direction:column;gap:12px;width:min(100%,640px);max-height:95dvh;padding:15px;background:#0c1c32;border:1px solid #3caeff;border-radius:18px;box-shadow:0 0 30px #168bff55;color:#eef7ff}
+.bt-address-top,.bt-address-search,.bt-address-actions{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.bt-address-search input{flex:1;min-width:0;margin:0!important}
+.bt-address-dialog button{padding:10px!important;min-height:42px!important;white-space:nowrap}
+#btAddressMap{width:100%;height:min(52dvh,480px);min-height:240px;z-index:0;border-radius:12px}
+#btMapHint{font-size:12px;color:#b3c7df;line-height:1.4;overflow-wrap:anywhere}
+.bt-address-actions button{flex:1}
+.bt-address-actions button:disabled{opacity:.4}
