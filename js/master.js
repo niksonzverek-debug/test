@@ -73,12 +73,29 @@ async function openMasterActPdf(number){
  try{const url=await masterActPublicUrl(number,'view-link');openMasterDocumentUrl(url)}
  catch(e){masterToast(e.message,true)}
 }
+function btMasterActPaymentLabel(status){return status==='paid'?'✓ Оплачено':status==='unpaid'?'Не оплачено':'Оплата не указана';}
+async function btMasterSaveActPayment(number,status){
+ try{
+  await masterApi(`/api/master/acts/${encodeURIComponent(String(number))}/payment-status`,'POST',{status});
+  const act=masterCache.acts.find(a=>String(a.number)===String(number));
+  if(act)act.payment_status=status;
+  masterToast('Статус оплаты сохранён');
+  previewMasterAct(number);
+ }catch(e){masterToast(e.message||'Не удалось сохранить статус',true)}
+}
+function btMasterAskPayment(number){
+ btMasterLastActNumber=number;
+ masterShell('Оплата по акту',`<article class="card"><h2>Акт № ${masterEsc(number)} создан</h2><p>Клиент оплатил выполненную работу?</p>
+ <div class="button-row"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">Да, оплатил</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Нет, ещё не оплатил</button></div>
+ <button type="button" class="back-btn" onclick="showMasterActs()">Ответить позже</button></article>`);
+}
 async function previewMasterAct(number){
  btMasterLastActNumber=number;
  clearMasterPdfUrl();
  masterShell('Просмотр акта',`<article class="card"><h2>Акт № ${masterEsc(number)}</h2>
  <p class="subtitle">Содержимое акта отображается сразу. PDF откроется в просмотрщике телефона или браузере.</p>
- ${masterActSummary(number)}
+ ${masterActSummary(number)}<div class="card"><p><b>Оплата:</b> ${masterEsc(btMasterActPaymentLabel(masterCache.acts.find(a=>String(a.number)===String(number))?.payment_status))}</p>
+ <div class="button-row"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">✓ Оплачено</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Не оплачено</button></div></div>
  <div class="button-row"><button type="button" onclick="openMasterActPdf('${masterEsc(number)}')">📄 Открыть PDF</button>
  <button type="button" class="secondary" onclick="downloadMasterAct('${masterEsc(number)}')">↓ Сохранить PDF</button></div>
  <div class="button-row"><button type="button" onclick="shareMasterAct('${masterEsc(number)}')">↗ Поделиться через Telegram</button>
@@ -591,7 +608,11 @@ let btActsObserver=null;
 async function showMasterActs(){
  try{await loadMasterData();}catch(e){return masterShell('Акты',`<article class="card error">${masterEsc(e.message)}</article>`);}
  clearMasterPdfUrl();
- const rows=masterCache.acts.filter(a=>a.status!=='cancelled').map(a=>`<article class="card"><div class="card-row"><b>Акт № ${masterEsc(a.number)}</b><span class="status-pill">${masterEsc(masterActStatus(a.status))}</span></div><p>${masterEsc([a.client_name,a.client_phone].filter(Boolean).join(' · '))}</p><p>${masterEsc([a.device,a.brand,a.model].filter(Boolean).join(' '))}</p><p><b>Итого: ${masterEsc(fmtPrice(a.final_price??a.price??0))}</b>${Number(a.discount_amount||0)>0?` · скидка ${masterEsc(fmtPrice(a.discount_amount))}`:''} · гарантия: ${masterEsc(a.guarantee_text||'—')}</p>${a.amounts_need_review?'<p class="error">Требуется проверка суммы в админке</p>':''}<p class="subtitle">Заявка: ${masterEsc(a.order_id||'без заявки')} · ${masterEsc(a.created_at||'')}</p>${a.correction_request_status==='pending'?'<p class="subtitle">📝 Запрос на исправление ожидает администратора</p>':a.correction_request_status==='resolved'?'<p class="subtitle">✓ Исправления внесены администратором</p>':''}<div class="button-row"><button type="button" onclick="previewMasterAct('${masterEsc(a.number)}')">◫ Открыть акт</button><button type="button" class="secondary" onclick="shareMasterAct('${masterEsc(a.number)}')">↗ Поделиться</button>${['pending','sending','pending_client','pending_delivery','sending_failed'].includes(a.status)?`<button type="button" onclick="retryMasterActDelivery('${masterEsc(a.number)}')">↻ Повторить доставку</button>`:''}</div><button type="button" class="secondary" onclick="showMasterActCorrection('${masterEsc(a.number)}')">✎ Подать заявку на исправление</button></article>`);
+ const rows=masterCache.acts.filter(a=>a.status!=='cancelled').map(a=>`<article class="card bt-master-act-compact">
+ <div class="card-row"><b>№ ${masterEsc(a.number)}</b><span class="status-pill">${masterEsc(masterActStatus(a.status))}</span></div>
+ <div><b>${masterEsc(a.client_name||'Клиент')}</b> · ${masterEsc([a.device,a.brand].filter(Boolean).join(' '))}</div>
+ <div class="subtitle"><b>${masterEsc(fmtPrice(a.final_price??a.price??0))}</b> · ${masterEsc(btMasterActPaymentLabel(a.payment_status))}</div>
+ <button type="button" class="secondary" onclick="previewMasterAct('${masterEsc(a.number)}')">Подробнее ›</button></article>`);
  if(btActsObserver){btActsObserver.disconnect();btActsObserver=null;}
  // Render only three act cards initially; add the next three when scrolling near the end.
  const listId='btMasterActPagedList', markerId='btMasterActsSentinel';
@@ -799,7 +820,7 @@ async function submitMasterAct(event,orderId){
   window.RemontMobile?.clearDirty();
   st.textContent=r.message||`Акт № ${r.number||''} создан.`;st.className='notice';masterToast(st.textContent);
   // Не скачиваем PDF автоматически: мастер открывает его в разделе «Акты».
-  try{await showMasterActs();}catch(e){st.textContent='Акт создан, но список не обновился. Откройте «Все акты». Через кнопку создавать его повторно не нужно.';}
+  try{await loadMasterData();btMasterAskPayment(r.number);}catch(e){st.textContent='Акт создан. Откройте «Все акты», чтобы отметить оплату. Повторно создавать акт не нужно.';}
  }catch(e){
    const networkFailure=(typeof navigator!=='undefined'&&navigator.onLine===false)||/failed to fetch|networkerror|load failed|fetch failed/i.test(String(e.message||''));
    if(networkFailure&&payload&&typeof queueOperation==='function'){
@@ -904,7 +925,7 @@ async function showMasterProfile(){
   masterShell('Настройки профиля',`<article class="card settings-intro"><h2>Профиль мастера</h2><p class="subtitle">Переключатели сохраняются сразу после нажатия. Остальные поля сохраняются кнопкой ниже.</p></article>
   <article class="card"><h2>🪪 Идентификация личности</h2><p id="identityStatus">Загрузка статуса…</p><button type="button" onclick="showMasterIdentity()">Пройти идентификацию</button></article>
   <form class="stack-list" onsubmit="event.preventDefault();saveMasterSettings()">
-  <article class="card"><label for="masterProfileName">Имя мастера</label><input id="masterProfileName" maxlength="100" required value="${masterEsc(p.name||'')}"><label for="masterProfilePhone">Телефон</label><input id="masterProfilePhone" maxlength="40" value="${masterEsc(p.phone||'')}" placeholder="+998…"><label for="masterAbout">О мастере (видно клиентам)</label><textarea id="masterAbout" maxlength="700" rows="4" placeholder="Опыт работы, специализация, подход к ремонту">${masterEsc(p.about||'')}</textarea><label for="masterAvatar">Фото профиля (видно клиентам)</label><div id="masterAvatarPreview">${p.avatar?`<img src="${masterEsc(p.avatar)}" alt="Фото мастера" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`:''}</div><input id="masterAvatar" type="file" accept="image/jpeg,image/png,image/webp" onchange="btPreviewMasterAvatar(this)"><button type="button" class="secondary" onclick="btClearMasterAvatar()">Удалить фото</button></article>
+  <article class="card"><label for="masterProfileName">Имя мастера</label><input id="masterProfileName" maxlength="100" required value="${masterEsc(p.name||'')}"><label for="masterProfilePhone">Телефон</label><input id="masterProfilePhone" maxlength="40" value="${masterEsc(p.phone||'')}" placeholder="+998…"><label for="masterAbout">О мастере (видно клиентам)</label><textarea id="masterAbout" maxlength="700" rows="4" placeholder="Опыт работы, специализация, подход к ремонту">${masterEsc(p.about||'')}</textarea><label for="masterPaynetUrl">Ссылка Paynet для оплаты клиентами</label><input id="masterPaynetUrl" type="url" maxlength="2048" placeholder="https://app.paynet.uz/..." value="${masterEsc(p.paynet_url||'')}"><p class="subtitle">Если поле пустое, кнопка оплаты у клиента не отображается.</p><label for="masterAvatar">Фото профиля (видно клиентам)</label><div id="masterAvatarPreview">${p.avatar?`<img src="${masterEsc(p.avatar)}" alt="Фото мастера" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`:''}</div><input id="masterAvatar" type="file" accept="image/jpeg,image/png,image/webp" onchange="btPreviewMasterAvatar(this)"><button type="button" class="secondary" onclick="btClearMasterAvatar()">Удалить фото</button></article>
   <article class="card"><h2>🗺️ Навигатор</h2><p class="subtitle">Выберите, где открывать маршрут к клиенту. Настройка сохраняется на этом устройстве.</p>
   <label for="masterPreferredNavigator">Приложение для маршрутов</label>
   <select id="masterPreferredNavigator" onchange="masterSetPreferredNavigator(this.value)">
@@ -970,7 +991,7 @@ async function saveMasterSettings(){
   const btn=document.getElementById('masterSettingsSave'),st=document.getElementById('masterSettingsStatus');
   if(!btn||!st)return;
   btn.disabled=true;st.textContent='Сохраняем…';st.className='subtitle';
-  const data={name:document.getElementById('masterProfileName').value.trim(),phone:document.getElementById('masterProfilePhone').value.trim(),about:document.getElementById('masterAbout').value.trim(),referral_settings:{new_client_discount_percent:Number(document.getElementById('masterReferralDiscount').value),referrer_reward_percent:Number(document.getElementById('masterReferralReward').value),invites_per_batch:Number(document.getElementById('masterReferralInvites').value)}};
+  const data={name:document.getElementById('masterProfileName').value.trim(),phone:document.getElementById('masterProfilePhone').value.trim(),about:document.getElementById('masterAbout').value.trim(),paynet_url:document.getElementById('masterPaynetUrl').value.trim(),referral_settings:{new_client_discount_percent:Number(document.getElementById('masterReferralDiscount').value),referrer_reward_percent:Number(document.getElementById('masterReferralReward').value),invites_per_batch:Number(document.getElementById('masterReferralInvites').value)}};
   try{
     if(window.btMasterAvatarDraft!==undefined)data.avatar=window.btMasterAvatarDraft;
     const r=await masterApi('/api/master/settings','POST',data);

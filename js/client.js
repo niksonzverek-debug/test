@@ -733,6 +733,7 @@ function showClientActPreview(number){
       <p><b>Итого:</b> ${escapeClient(btActMoney(act.final_price??act.price))}</p>
       <p><b>Гарантия:</b> ${escapeClient(act.guarantee_text||'—')} · до ${escapeClient(act.guarantee_until||'—')}</p>
       <p>${btWarrantyIndicator(act)}</p>
+      ${act.paynet_url?`<a class="btn" href="${escapeClient(act.paynet_url)}" target="_blank" rel="noopener noreferrer">💳 Оплатить через Paynet</a><p class="subtitle">Оплата откроется в Paynet. После оплаты сообщите мастеру — автоматической проверки пока нет.</p>`:''}
       <button type="button" onclick="openClientActPdf('${escapeClient(number)}')">📄 Открыть PDF</button>
       <button type="button" class="secondary" onclick="downloadClientActPdf('${escapeClient(number)}')">↓ Сохранить PDF</button>
       <button type="button" class="back-btn" onclick="showMyActs()">← Все акты</button></article>`);
