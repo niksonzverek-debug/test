@@ -1200,3 +1200,17 @@ body:has(.bt-client-home) > #btLangWidget{
 /* Fixed bottom navigation must not conceal the last client tile or card. */
 .bt-client-bottom-nav{bottom:0!important;padding-bottom:calc(8px + var(--rb-safe-bottom, env(safe-area-inset-bottom, 0px)))!important}
 @media(max-width:360px){.bt-client-home .bt-client-header{padding-right:59px!important}}
+
+
+/* Client profile language button: inside the card, never floating over Telegram UI. */
+.bt-client-home .bt-client-header{position:relative!important;overflow:visible!important;padding-right:66px!important}
+.bt-client-home .bt-client-header #remontLangToggle{
+ position:absolute!important;top:12px!important;right:12px!important;bottom:auto!important;left:auto!important;
+ margin:0!important;transform:none!important;z-index:100!important;
+ display:flex!important;align-items:center!important;justify-content:center!important;
+ pointer-events:auto!important;
+}
+.bt-client-home .bt-client-header #remontLangToggle .bt-lang-menu{
+ position:absolute!important;right:0!important;left:auto!important;top:44px!important;bottom:auto!important;z-index:101!important;
+}
+@media(max-width:360px){.bt-client-home .bt-client-header{padding-right:60px!important}}

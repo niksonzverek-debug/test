@@ -123,9 +123,17 @@
     document.dispatchEvent(new CustomEvent('bt:languagechange',{detail:{language:next}}));
   }
   window.setMiniLanguage=changeLang;
+  // Mount the existing working language selector inside the client profile card.
+  // The client SPA replaces body.innerHTML on navigation, so this runs again
+  // whenever the dashboard is rendered. Other roles keep their original layout.
+  function placeSwitch(widget){
+    const header=document.querySelector('.bt-client-home .bt-client-header');
+    if(header && widget.parentElement!==header) header.appendChild(widget);
+  }
   function ensureSwitch(){
     if(!document.body)return;
-    const prev=document.getElementById('remontLangToggle');if(prev)return;
+    const prev=document.getElementById('remontLangToggle');
+    if(prev){placeSwitch(prev);return;}
     const bar=document.createElement('div');bar.id='remontLangToggle';bar.className='bt-lang-widget';
     const open=document.createElement('button');open.type='button';open.className='bt-lang-current';
     open.setAttribute('aria-label','Сменить язык / Tilni almashtirish / Change language');
@@ -138,7 +146,7 @@
     }
     open.addEventListener('click',()=>{menu.hidden=!menu.hidden;open.setAttribute('aria-expanded',String(!menu.hidden));});
     document.addEventListener('click',event=>{if(!bar.contains(event.target)){menu.hidden=true;open.setAttribute('aria-expanded','false');}}, {capture:true});
-    bar.append(open,menu);document.body.appendChild(bar);
+    bar.append(open,menu);document.body.appendChild(bar);placeSwitch(bar);
   }
   const run=()=>{ensureSwitch();translateTree(document.body);document.documentElement.lang=language();};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run();
@@ -150,7 +158,7 @@
         if(mutation.type==='childList'&&mutation.addedNodes.length){recreate=true;translate=true;}
         if(mutation.type==='characterData')translate=true;
       }
-      if(recreate&&!document.getElementById('remontLangToggle'))ensureSwitch();
+      if(recreate)ensureSwitch();
       if(translate)translateTree(document.body);
     });
     mo.observe(document.body,{subtree:true,childList:true,characterData:true});
