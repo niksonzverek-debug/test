@@ -1084,7 +1084,8 @@ body:has(.bt-client-home),body:has(.master-app){
 /* Master home layout — clean compact replacement, 03 Nov 2026. */
 /* Leave the Telegram chrome visible; no decorative lines or animations. */
 body:has(.master-app){background:#061326!important;background-image:radial-gradient(ellipse at 50% 0%,#10345a 0%,#081a31 45%,#050c1b 100%)!important;background-attachment:fixed!important}
-.master-app{padding-top:calc(55px + max(var(--rb-safe-top,0px),var(--rb-content-top,0px),env(safe-area-inset-top,0px)))!important}
+/* The body already accounts for Telegram safe-area offsets. Do not add them twice. */
+.master-app{padding-top:12px!important}
 .master-app::before,.master-app::after{content:none!important;display:none!important;animation:none!important;background:none!important}
 .master-app .bt-master-header{
  display:grid!important;grid-template-columns:54px minmax(0,1fr) 43px!important;
