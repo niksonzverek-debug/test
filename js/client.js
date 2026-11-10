@@ -1211,6 +1211,8 @@ function showNewOrder() {
     ` + btClientBottomNav();
     orderData.location=null;
     orderData.mapAddress='';
+    orderData.serviceRegion='';
+    orderData.serviceDistrict='';
     btEnhanceClientOrderPickers();
     btServiceDirectionChanged();
     btClientBindOrderValidation();
@@ -1387,11 +1389,12 @@ function btServiceDirectionChanged(){
     const option=new Option(label,code); option.dataset.displayName=label; select.add(option);
   }
   const custom=document.getElementById('device_custom_wrap');if(custom)custom.style.display='none';
-  // Native select is reliable in Telegram WebView and stays visible even if custom-picker CSS fails.
+  // Rebuild the original visual dropdown after updating native options.
   document.getElementById('deviceStyledPicker')?.remove();
   select.classList.remove('bt-enhanced-native-select');
   delete select.dataset.enhanced;
-  select.style.cssText='display:block!important;position:static!important;left:auto!important;opacity:1!important;pointer-events:auto!important;width:100%!important;min-height:46px!important;background:#10243e!important;color:#fff!important;border:1px solid #3678a8!important;border-radius:10px!important;padding:10px!important;';
+  select.removeAttribute('style');
+  btRenderStyledClientPicker('device');
   btClientUpdateSubmitGlow();
 }
 function btClientUpdateSubmitGlow(){
@@ -1605,6 +1608,8 @@ async function submitOrder() {
         comment: comment,
         promo_code: order_promo_code,
         location: orderData.location || null,
+        service_region: String(orderData.serviceRegion||''),
+        service_district: String(orderData.serviceDistrict||''),
     };
 
     // Даже если клиент не нажал «Проверить», сервер проверит и привяжет активный код
@@ -1908,16 +1913,25 @@ async function btConfirmAddressMap(){
     const center=btAddressMapInstance.getCenter();
     if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
     if(center.lat<35||center.lat>46||center.lng<55||center.lng>74){const hint=document.getElementById('btMapHint');if(hint)hint.textContent='Выберите точку на территории Узбекистана.';return;}
-    let verified;
-    try{verified=await clientApi('/api/map/reverse?lat='+encodeURIComponent(center.lat)+'&lon='+encodeURIComponent(center.lng));}
-    catch(e){const hint=document.getElementById('btMapHint');if(hint)hint.textContent=e.message||'Не удалось определить район. Повторите попытку.';return;}
-    if(!verified.verified){const hint=document.getElementById('btMapHint');if(hint)hint.textContent='Не удалось определить область или район. Укажите точку точнее.';return;}
-    orderData.serviceRegion=verified.region;
-    orderData.serviceDistrict=verified.district;
-    orderData.location={lat:center.lat,lon:center.lng};
-    orderData.mapAddress=btAddressMapLabel||document.getElementById('btMapSearch')?.value.trim()||'';
+    const hint=document.getElementById('btMapHint');
+    const button=document.getElementById('btMapConfirm');
+    if(button)button.disabled=true;
+    let verified=null;
+    try {
+        verified=await clientApi('/api/map/reverse?lat='+encodeURIComponent(center.lat)+'&lon='+encodeURIComponent(center.lng));
+    } catch(e) {
+        console.warn('Reverse geocoding unavailable:',e);
+    } finally {if(button)button.disabled=false;}
+    // Saving a chosen GPS point must not depend on third-party geocoding uptime.
+    orderData.location={lat:Number(center.lat.toFixed(6)),lon:Number(center.lng.toFixed(6))};
+    orderData.serviceRegion=verified?.verified ? String(verified.region||'') : '';
+    orderData.serviceDistrict=verified?.verified ? String(verified.district||'') : '';
+    orderData.mapAddress=verified?.address || btAddressMapLabel || document.getElementById('btMapSearch')?.value.trim() || '';
     const status=document.getElementById('location_status');
-    if(status){status.textContent='✅ Точка на карте подтверждена';status.style.color='#43dba1';}
+    if(status){
+      status.textContent=verified?.verified ? '✅ Точка сохранена: '+orderData.serviceDistrict : '✅ Точка сохранена. Район не определён автоматически; заявка будет отправлена без районного поиска.';
+      status.style.color='#43dba1';
+    }
     btCloseAddressMap();btClientUpdateSubmitGlow();
 }
 function btCloseAddressMap(){
