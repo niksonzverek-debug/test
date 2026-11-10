@@ -1429,3 +1429,30 @@ body.bt-order-page .bt-map-open{margin-top:9px!important}
 .bt-client-master-apply-form .bt-client-master-skill span{display:inline!important;flex:1;font-weight:500}
 .bt-client-master-apply-form .bt-client-master-apply-nav{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr);gap:9px;margin-top:18px}
 .bt-client-master-apply-form .bt-client-master-apply-nav button{margin:0!important;min-width:0!important;font-size:13px!important;padding:12px 8px!important;line-height:1.25}
+
+/* v16: first-order territory selection */
+.bt-client-territory-header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.bt-client-territory-header strong{font-size:15px}
+.bt-client-territory-header button{padding:5px 9px;width:auto;min-width:0;font-size:12px;line-height:1.2;border-radius:8px}
+.bt-client-territory-card .subtitle{font-size:12px;margin:6px 0 10px}
+.bt-client-territory-summary{font-size:13px;line-height:1.5;padding:9px 10px;border-radius:9px;background:rgba(34,119,180,.11);margin:6px 0 0}
+.bt-client-territory-card label{display:block;margin:9px 0 5px}
+.bt-client-territory-card [hidden],.bt-client-territory-summary[hidden]{display:none!important}
+.bt-map-territory-hint{font-size:12px;line-height:1.35;opacity:.85;margin:2px 0 8px}
+
+/* v17: one-step client territory selector, small-device legibility. */
+.bt-client-territory-card{max-width:100%;min-width:0;box-sizing:border-box;overflow:visible}
+.bt-client-territory-card .bt-client-territory-header{flex-wrap:wrap;gap:6px}
+.bt-client-territory-card #btOrderTerritoryControls{min-width:0;max-width:100%}
+.bt-client-territory-card #btOrderRegion{width:100%;max-width:100%;box-sizing:border-box}
+.bt-client-territory-card .bt-client-picker{max-width:100%;min-width:0;box-sizing:border-box}
+.bt-client-territory-card .bt-client-picker summary{min-width:0;overflow-wrap:anywhere}
+.bt-marketplace-panel-v13{width:min(95vw,520px)!important;max-width:calc(100vw - 20px)!important;box-sizing:border-box!important}
+.bt-marketplace-panel-v13 .bt-marketplace-card-info,.bt-marketplace-panel-v13 .bt-marketplace-card-facts{min-width:0;overflow-wrap:anywhere}
+@media(max-width:360px){
+  .bt-marketplace-panel-v13{padding:8px!important}
+  .bt-marketplace-panel-v13 .bt-marketplace-card-v13{grid-template-columns:26px minmax(0,1fr) 67px!important;gap:5px!important;padding:6px!important}
+  .bt-marketplace-panel-v13 .bt-marketplace-avatar-v13{width:26px!important;height:26px!important}
+  .bt-marketplace-panel-v13 .bt-marketplace-card-select{width:67px!important;max-width:67px!important;font-size:10px!important}
+  .bt-client-territory-header strong{font-size:13px}
+}

@@ -1200,12 +1200,97 @@ function btSaveCurrentAddress(which){
         if(status)status.textContent='Адрес сохранён на этом устройстве (без GPS).';
     }catch(_){showAlert('Не удалось сохранить адрес на устройстве.');}
 }
+let btAreaUserTouched=false;
+// Регион выбирается клиентом при первом оформлении заявки, а затем хранится
+// в его серверном профиле. localStorage — только ускоряющий кеш, не источник прав.
+function btOrderTerritoryKey(){
+    return currentClientTelegramId ? 'tehservis_client_area_v1_'+currentClientTelegramId : '';
+}
+function btSavedOrderTerritory(){
+    const key=btOrderTerritoryKey(); if(!key)return null;
+    try{
+        const saved=JSON.parse(localStorage.getItem(key)||'null');
+        if(saved && Object.hasOwn(btMapTerritories,saved.region))return {region:saved.region,district:saved.district||''};
+    }catch(_){}return null;
+}
+function btStoreOrderTerritory(region,district){
+    const key=btOrderTerritoryKey();
+    if(!key || !Object.hasOwn(btMapTerritories,region))return;
+    try{localStorage.setItem(key,JSON.stringify({region,district}));}catch(_){}
+}
+function btAreaRefreshPicker(id){
+    const el=document.getElementById(id);if(!el)return;
+    document.getElementById(id+'StyledPicker')?.remove();
+    delete el.dataset.enhanced;
+    el.classList.remove('bt-enhanced-native-select');
+    el.removeAttribute('style');
+    btRenderStyledClientPicker(id);
+}
+// Customer selects one territory only. District is automatically derived from the map.
+function btAreaShowEditor(){
+    const controls=document.getElementById('btOrderTerritoryControls');
+    if(controls)controls.hidden=false;
+    const summary=document.getElementById('btOrderTerritorySummary');
+    if(summary)summary.hidden=true;
+}
+function btAreaRenderState(){
+    const summary=document.getElementById('btOrderTerritorySummary');
+    const edit=document.getElementById('btOrderTerritoryControls');
+    if(!summary||!edit)return;
+    const valid=Object.hasOwn(btMapTerritories,orderData.serviceRegion);
+    summary.hidden=!valid;
+    edit.hidden=valid;
+    if(valid)summary.textContent='📍 '+orderData.serviceRegion;
+    btClientUpdateSubmitGlow();
+}
+function btAreaSet(region,_district='',{resetMap=true}={}){
+    if(!Object.hasOwn(btMapTerritories,region))return false;
+    if(resetMap && orderData.serviceRegion!==region){
+        orderData.location=null;orderData.mapAddress='';orderData.serviceDistrict='';
+        const status=document.getElementById('location_status');
+        if(status){status.textContent='Город / область изменены. Подтвердите точку ремонта на карте заново.';status.style.color='#888';}
+    }
+    orderData.serviceRegion=region;
+    const sel=document.getElementById('btOrderRegion');
+    if(sel && sel.value!==region){sel.value=region;btAreaRefreshPicker('btOrderRegion');}
+    btAreaRenderState();return true;
+}
+function btAreaRegionChanged(){
+    btAreaUserTouched=true;
+    const region=document.getElementById('btOrderRegion')?.value||'';
+    if(!Object.hasOwn(btMapTerritories,region)){
+        orderData.serviceRegion='';orderData.serviceDistrict='';
+        orderData.location=null;orderData.mapAddress='';btAreaRenderState();return;
+    }
+    btAreaSet(region,'',{resetMap:true});
+}
+function btAreaInitialize(){
+    const select=document.getElementById('btOrderRegion');if(!select)return;
+    select.replaceChildren(new Option('— Выберите город / область —',''));
+    for(const region of Object.keys(btMapTerritories))select.add(new Option(region,region));
+    btAreaRefreshPicker('btOrderRegion');
+    const saved=btSavedOrderTerritory();
+    if(saved)btAreaSet(saved.region,'',{resetMap:false});
+    else btAreaRenderState();
+}
+// Примерные центры регионов для стартового масштаба карты (не адрес ремонта).
+const btRegionMapCenters={
+    'Ташкент (город)':[41.30,69.24], 'Ташкентская область':[41.47,69.59],
+    'Андижанская область':[40.78,72.34], 'Бухарская область':[39.77,64.42],
+    'Джизакская область':[40.12,67.84], 'Кашкадарьинская область':[38.86,65.79],
+    'Навоийская область':[40.10,65.37], 'Наманганская область':[41.00,71.67],
+    'Самаркандская область':[39.65,66.96], 'Сурхандарьинская область':[37.23,67.28],
+    'Сырдарьинская область':[40.49,68.79], 'Ферганская область':[40.38,71.79],
+    'Хорезмская область':[41.55,60.63], 'Республика Каракалпакстан':[42.46,59.61]
+};
+
 // ============ НОВАЯ ЗАЯВКА ============
 
 function showNewOrder() {
     if(!btLegalApproved){void btLegalGate(clientApi,showNewOrder,"client");return;}
     window.RemontMobile?.enter('client/new-order',()=>showNewOrder());
     btOrderOperationId=uuidV4();
+    btAreaUserTouched=false;
     orderData = {
         device: "",
         brand: "",
@@ -1263,6 +1348,16 @@ function showNewOrder() {
         <div class="card" id="clientIdentityCard" style="display:none">
             <label for="client_name">Ваше ФИО (только при первой заявке)</label>
             <input id="client_name" maxlength="150" placeholder="Введите ФИО" autocomplete="name" autocapitalize="words">
+        </div>
+
+        <div class="card bt-client-territory-card" id="btClientAreaCard">
+            <div class="bt-client-territory-header"><strong>📍 Ваш город / область</strong><button type="button" onclick="btAreaShowEditor()">Изменить</button></div>
+            <p class="subtitle">Укажите, где нужен ремонт. Это ограничит поиск мастеров и поможет карте находить адрес.</p>
+            <p id="btOrderTerritorySummary" class="bt-client-territory-summary" hidden></p>
+            <div id="btOrderTerritoryControls">
+                <label for="btOrderRegion">Город / область *</label>
+                <select id="btOrderRegion" class="bt-client-select" onchange="btAreaRegionChanged()"><option value="">— Выберите —</option></select>
+            </div>
         </div>
 
         <div class="card">
@@ -1342,6 +1437,7 @@ function showNewOrder() {
     orderData.serviceDistrict='';
     btEnhanceClientOrderPickers();
     btServiceDirectionChanged();
+    btAreaInitialize();
     btClientBindOrderValidation();
 
     try {
@@ -1364,6 +1460,11 @@ function showNewOrder() {
         btClientUpdateSubmitGlow();
         clientApi('/api/client/profile').then(d=>{
             const profile=d.profile||{};
+            if(!document.getElementById('btClientAreaCard'))return;
+            if(!btAreaUserTouched && profile.service_region){
+                if(btAreaSet(profile.service_region,profile.service_district,{resetMap:true}))
+                    btStoreOrderTerritory(profile.service_region,profile.service_district);
+            }
             if(profile.name)document.getElementById('client_name').value=profile.name;
             if(profile.name_confirmed){
                 identityCard.style.display='none';
@@ -1551,7 +1652,8 @@ function btClientUpdateSubmitGlow(){
     const nameOk=!identity||identity.style.display==='none'||value('client_name').length>=2;
     const loc=orderData.location;
     const gpsOk=loc&&Number.isFinite(Number(loc.lat))&&Number.isFinite(Number(loc.lon));
-    const ready=Boolean(nameOk&&device&&brand&&value('problem').length>=5&&value('when_date')&&value('when_time')&&gpsOk);
+    const territoryOk=Object.hasOwn(btMapTerritories,orderData.serviceRegion);
+    const ready=Boolean(nameOk&&device&&brand&&value('problem').length>=5&&value('when_date')&&value('when_time')&&gpsOk&&territoryOk);
     btn.classList.toggle('bt-field-ready',ready);btn.classList.toggle('bt-field-empty',!ready);
     for(const id of ['service_direction','device','brand','when_date','when_time']){
         const el=document.getElementById(id);if(!el)continue;
@@ -1717,6 +1819,7 @@ async function submitOrder() {
 
     if (!when_date) return showAlert('Выберите дату');
     if (!when_time) return showAlert('Выберите время');
+    if(!Object.hasOwn(btMapTerritories,orderData.serviceRegion)){btAreaShowEditor();return showAlert('Выберите город / область для поиска мастеров.');}
     if (!orderData.location) return showAlert('Выберите точку ремонта на карте');
 
     try {
@@ -1770,10 +1873,10 @@ async function submitOrder() {
         }
     }
 
-    // Marketplace master choice. Never infer district from GPS without verified reverse geocoding.
+    // Marketplace eligibility is by REGION. The verified map district ranks ties only.
     const serviceRegion = String(orderData.serviceRegion || '').trim();
     const serviceDistrict = String(orderData.serviceDistrict || '').trim();
-    if (service_code && serviceRegion && serviceDistrict) {
+    if (service_code && serviceRegion) {
         try {
             const matching=await clientApi('/api/client/marketplace-masters?service_code='+encodeURIComponent(service_code)
                 +'&region='+encodeURIComponent(serviceRegion)+'&district='+encodeURIComponent(serviceDistrict)
@@ -1810,6 +1913,7 @@ async function submitOrder() {
             localStorage.setItem('remont_bt_name',client_name);
         }
         localStorage.setItem('remont_bt_registered','1');
+        btStoreOrderTerritory(orderData.serviceRegion,orderData.serviceDistrict);
         btOrderOperationId=null;
         // Остаёмся в Mini App: Telegram-чат не открывается автоматически.
         window.RemontMobile?.clearDirty();
@@ -1970,14 +2074,23 @@ function btMapNorm(v){
 }
 function btMapLatin(v){
     const ru={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'sh',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
-    return btMapNorm(v).replace(/[а-я]/g,ch=>ru[ch]||ch).replace(/kh/g,'h').replace(/(?:skiy|skaya|ski|iy)$/,'');
+    return btMapNorm(v).replace(/[а-я]/g,ch=>ru[ch]||ch).replace(/kh/g,'h')
+        .replace(/kibray/g,'qibray').replace(/qibraysk/g,'qibray')
+        .replace(/tashkent/g,'toshkent').replace(/(?:skiy|skaya|ski|iy)$/,'');
 }
 function btMapSameName(a,b){
     const x=btMapNorm(a),y=btMapNorm(b);
     if(!x||!y)return false;
-    if(x===y||((x.length>=6&&y.length>=6)&&(x.startsWith(y)||y.startsWith(x))))return true;
+    if(x===y||((x.length>=6&&y.length>=6&&Math.abs(x.length-y.length)<=2)&&(x.startsWith(y)||y.startsWith(x))))return true;
     const lx=btMapLatin(a),ly=btMapLatin(b);
-    return lx===ly||((lx.length>=6&&ly.length>=6)&&(lx.startsWith(ly)||ly.startsWith(lx)));
+    return lx===ly||((lx.length>=6&&ly.length>=6&&Math.abs(lx.length-ly.length)<=2)&&(lx.startsWith(ly)||ly.startsWith(lx)));
+}
+function btMapDistrictMatches(region,area,candidate){
+    // 'Tashkent City' is NOT 'Ташкентский район': don't erase the admin
+    // designation and confuse the city with its namesake district.
+    if(region==='Ташкентская область' && area==='Ташкентский район' &&
+       !/(?:район|туман|tuman|district|rayon)/i.test(String(candidate||'')))return false;
+    return btMapSameName(area,candidate);
 }
 function btMapTerritoryFromReverse(result){
     const raw=String(result.region||'').trim();
@@ -1987,9 +2100,14 @@ function btMapTerritoryFromReverse(result){
     // Disambiguate Tashkent city from Tashkent region before generic matching.
     if(/ташкентск(?:ая|ой)\s+област|toshkent\s+viloyat|tashkent\s+region|tashkent\s+oblast/i.test(txt)){
         region='Ташкентская область';
-    }else if(/^(ташкент|tashkent|toshkent|город ташкент|tashkent city)$/i.test(raw)||
-        (/ташкент|tashkent|toshkent/i.test(address)&&/мирзо.?улугбек|mirzo.?ulugbek|юнусабад|yunusabad|чиланзар|chilanzar|яккасарай|yakkasaroy|сергел|sergel|шайханта|shaykhant|мирабад|mirobad|алмазар|olmazor|яшнабад|yashnobod|бектемир|bektemir|учтеп|uchtepa|янгиха|yangihayot/i.test(address))){
+    }else if([result.district,...address.split(',')].some(item=>(btMapTerritories['Ташкентская область']||[]).some(area=>btMapDistrictMatches('Ташкентская область',area,item)))){
+        region='Ташкентская область';
+    }else if([result.district,...address.split(',')].some(item=>(btMapTerritories['Ташкент (город)']||[]).some(area=>btMapDistrictMatches('Ташкент (город)',area,item)))||
+        /^(город ташкент|tashkent city|toshkent shahri)$/i.test(raw)){
         region='Ташкент (город)';
+    }else if(/^(ташкент|tashkent|toshkent)$/i.test(raw)){
+        // The bare name is ambiguous between Tashkent city and region.
+        region='';
     }else{
         const regionCandidates=[raw,...address.split(',').map(v=>v.trim())];
         for(const candidate of regionCandidates){
@@ -2000,7 +2118,7 @@ function btMapTerritoryFromReverse(result){
     let district='';
     if(region){
         for(const candidate of [result.district,...address.split(',')]){
-            const matched=(btMapTerritories[region]||[]).find(name=>btMapSameName(name,candidate));
+            const matched=(btMapTerritories[region]||[]).find(name=>btMapDistrictMatches(region,name,candidate));
             if(matched){district=matched;break;}
         }
     }
@@ -2023,11 +2141,16 @@ async function btMapRecognizeCurrentPoint(){
         }
         const territory=btMapTerritoryFromReverse(result);
         const address=String(result.address||btAddressMapLabel||'').trim().slice(0,400);
-        if(!territory.region||!territory.district){
-            throw new Error('Не удалось точно определить '+(!territory.region?'область и район':'район')+'. Уточните адрес через поиск или немного переместите метку.');
+        if(territory.region && territory.region!==orderData.serviceRegion){
+            throw new Error('Метка находится в другой области: '+territory.region+'. Уточните точку или измените область в заявке.');
         }
+        // A district is NEVER a hard filter: masters can work city/region-wide.
+        // Derive it only after verifying the map's region.
+        // Reverse geocoders often omit/translate districts. An explicitly chosen
+        // territory is retained when the provider has no reliable counterpart.
+        // A recognized different region or district is always rejected above.
         if(!address)throw new Error('Не удалось определить адрес. Уточните запрос или выберите другую точку.');
-        return {...territory,address};
+        return {region:orderData.serviceRegion,district:territory.district||'',address};
     }catch(e){
         const feedback=document.getElementById('btMapActionFeedback');
         if(feedback){feedback.textContent=e.message||'Не удалось распознать адрес.';feedback.style.display='block';}
@@ -2039,9 +2162,13 @@ async function btMapRecognizeCurrentPoint(){
     }
 }
 async function btOpenAddressMap(){
+    if(!Object.hasOwn(btMapTerritories,orderData.serviceRegion)){
+        btAreaShowEditor();return showAlert('Сначала выберите город / область.');
+    }
     if(document.getElementById('btAddressOverlay'))return;
     const overlay=document.createElement('div');overlay.id='btAddressOverlay';overlay.className='bt-address-overlay';
     overlay.innerHTML=`<div class="bt-address-dialog bt-map-simple" role="dialog" aria-modal="true" aria-label="Выбор адреса">
+      <p class="bt-map-territory-hint">📍 Поиск: ${escapeClient(orderData.serviceRegion)}</p>
       <div class="bt-map-stage"><div id="btAddressMap"></div><button type="button" id="btMapLayerToggle" onclick="btMapSetLayer(btMapStyle==='street'?'satellite':'street')" aria-label="Включить спутник">🛰️ Спутник</button><div class="bt-map-center-pin" aria-hidden="true"><span>📍</span></div></div>
       <div class="bt-address-search"><input id="btMapSearch" placeholder="Улица, дом, махалля или ориентир" autocomplete="street-address" onkeydown="if(event.key==='Enter'){event.preventDefault();btSearchAddressMap();}"></div>
       <div class="bt-map-search-actions"><button type="button" id="btMapSearchButton" onclick="btSearchAddressMap()">🔎 Найти адрес</button><button type="button" id="btMapMyLocation" onclick="btMapUseMyLocation()">📍 Моя локация</button></div>
@@ -2059,7 +2186,8 @@ async function btOpenAddressMap(){
             });
         }
         if(!document.getElementById('btAddressOverlay'))return;
-        const initial=orderData.location||{lat:41.2995,lon:69.2401};
+        const center=btRegionMapCenters[orderData.serviceRegion]||[41.2995,69.2401];
+        const initial=orderData.location||{lat:center[0],lon:center[1]};
         btAddressMapInstance=L.map('btAddressMap',{zoomControl:true}).setView([initial.lat,initial.lon],orderData.location?17:12);
         btMapLayers={
             street:L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}),
@@ -2137,7 +2265,8 @@ async function btSearchAddressMap(){
     if(button)button.disabled=true;
     try{
         const center=btAddressMapInstance.getCenter();
-        const params=new URLSearchParams({q:query,lat:String(center.lat),lon:String(center.lng)});
+        const params=new URLSearchParams({q:query,lat:String(center.lat),lon:String(center.lng),
+            region:orderData.serviceRegion,district:orderData.serviceDistrict});
         const payload=await clientApi('/api/map/geocode?'+params.toString());
         if(ticket!==btMapSearchTicket||!document.getElementById('btAddressOverlay')||!btAddressMapInstance)return;
         const places=Array.isArray(payload.results)?payload.results:[];
@@ -2201,11 +2330,12 @@ async function btConfirmAddressMap(){
     const current=btAddressMapInstance?.getCenter();
     if(!current||btMapPointKey(current)!==btMapPointKey(center))return;
     orderData.location={lat:Number(center.lat.toFixed(6)),lon:Number(center.lng.toFixed(6))};
-    orderData.serviceRegion=resolved.region;
-    orderData.serviceDistrict=resolved.district;
+    // Area is client-confirmed and already verified against reverse geocoding;
+    // the map must never silently replace it with a different city/region.
     orderData.mapAddress=resolved.address;
+    orderData.serviceDistrict=resolved.district||'';
     const status=document.getElementById('location_status');
-    if(status){status.textContent='✅ '+resolved.region+', '+resolved.district+' — '+resolved.address;status.style.color='#43dba1';}
+    if(status){status.textContent='✅ '+resolved.region+(resolved.district?', '+resolved.district:'')+' — '+resolved.address;status.style.color='#43dba1';}
     btCloseAddressMap();btClientUpdateSubmitGlow();
 }
 function btCloseAddressMap(){
@@ -2267,7 +2397,7 @@ function btChooseMarketplaceMaster(masters){
     };
     if(!masters.length){
       const empty=document.createElement('p');empty.className='bt-marketplace-empty';
-      empty.textContent='В вашем районе пока нет подходящих мастеров.';list.append(empty);
+      empty.textContent='В выбранном городе / области пока нет подходящих мастеров.';list.append(empty);
     }
     for(const m of masters){
       const card=document.createElement('article');
