@@ -1052,6 +1052,7 @@ async function showMasterProfile(){
   const localEnabled=r.master_enabled!==undefined?!!r.master_enabled:(r.enabled!==false);
   const adminEnabled=r.admin_enabled!==false;
   masterShell('Настройки профиля',`<style id="bt-master-profile-tweaks">.bt-identity-status{padding:9px 12px;border-radius:10px;border:1px solid #ef4444;box-shadow:0 0 12px rgba(255,38,55,.45);color:#ffb7bd;font-weight:700}.bt-identity-approved{border-color:#24d57b;box-shadow:0 0 12px rgba(26,220,105,.5);color:#baffd4}.bt-profile-form input:not([type=file]):not([type=checkbox]),.bt-profile-form textarea{border-color:#e64a5e;box-shadow:0 0 9px rgba(238,46,68,.3)}.bt-profile-form .bt-field-filled{border-color:#25c878!important;box-shadow:0 0 9px rgba(37,200,120,.28)!important}.bt-avatar-file-button{display:inline-flex;align-items:center;justify-content:center;padding:13px 18px;border:1px solid #36b8ff;border-radius:12px;background:linear-gradient(125deg,#167bca,#275fe0);color:#fff;font-weight:700;cursor:pointer;margin:8px 0}.bt-avatar-file-input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;overflow:hidden!important}.bt-avatar-file-button:focus-within{outline:2px solid #fff}.bt-client-repair{padding:12px 0;border-top:1px solid #31557d;line-height:1.65}.bt-promo-actions{margin:6px 0 18px}.bt-promo-actions button{width:auto;max-width:100%;padding:12px 18px}.bt-promo-empty{margin:0;padding:12px 4px;color:#a9bed9}</style><article class="card settings-intro"><h2>Профиль мастера</h2><p class="subtitle">Переключатели сохраняются сразу после нажатия. Остальные поля сохраняются кнопкой ниже.</p></article>
+  <article class="card"><h2>🔧 Мои специализации</h2><p class="subtitle">Выберите все работы, которые выполняете. Изменения сохраняются в профиле.</p><div id="masterSkillsList">Загрузка…</div><button type="button" onclick="btSaveMasterSkills()">Сохранить специализации</button><p id="masterSkillsStatus" role="status"></p></article>
   <article class="card"><h2>🪪 Идентификация личности</h2><p id="identityStatus">Загрузка статуса…</p><button type="button" onclick="showMasterIdentity()">Пройти идентификацию</button></article>
   <form class="stack-list bt-profile-form" onsubmit="event.preventDefault();saveMasterSettings()">
   <article class="card"><label for="masterProfileName">Имя мастера</label><input id="masterProfileName" maxlength="100" required value="${masterEsc(p.name||'')}"><label for="masterProfilePhone">Телефон</label><input id="masterProfilePhone" maxlength="40" value="${masterEsc(p.phone||'')}" placeholder="+998…"><label for="masterAbout">О мастере (видно клиентам)</label><textarea id="masterAbout" maxlength="700" rows="4" placeholder="Опыт работы, специализация, подход к ремонту">${masterEsc(p.about||'')}</textarea><label for="masterAvatar">Фото профиля (видно клиентам)</label><div id="masterAvatarPreview">${p.avatar?`<img src="${masterEsc(p.avatar)}" alt="Фото мастера" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`:''}</div><label for="masterAvatar" class="bt-avatar-file-button">📷 Выбрать фото профиля</label><input id="masterAvatar" class="bt-avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp" onchange="btPreviewMasterAvatar(this)"><p id="btAvatarFileName" class="subtitle">JPG, PNG или WebP · до 4 МБ</p><button type="button" class="secondary" onclick="btClearMasterAvatar()">Удалить фото</button></article>
@@ -1071,7 +1072,7 @@ async function showMasterProfile(){
   <label>Вознаграждение пригласившему, %</label><input id="masterReferralReward" type="number" min="0" max="100" step="0.5" value="${Number(r.referrer_reward_percent??5)}">
   <label>Приглашений в одной партии</label><input id="masterReferralInvites" type="number" min="1" max="100" step="1" value="${Number(r.invites_per_batch??10)}">
   </article><article class="card"><button id="masterSettingsSave" type="submit">Сохранить остальные настройки</button><p id="masterSettingsStatus" class="subtitle" role="status"></p></article></form>
-  <button class="bt-master-support-entry" type="button" onclick="showMasterSupport()">💬 Написать в поддержку</button>`);masterIdentityStatus();btProfileMarkFields();
+  <button class="bt-master-support-entry" type="button" onclick="showMasterSupport()">💬 Написать в поддержку</button>`);masterIdentityStatus();btProfileMarkFields();btLoadMasterSkills();
 }
 function btProfileMarkFields(){
  const form=document.querySelector('.bt-profile-form');if(!form)return;
@@ -1420,3 +1421,25 @@ async function showMasterFinanceReport(){
 
 /* Required act choices: red neon until selected, green after completion. */
 (function(){const style=document.createElement('style');style.textContent=`.bt-master-picker.bt-act-required,.bt-act-required#actLocationButton{border:1px solid #ff4058!important;box-shadow:0 0 7px rgba(255,45,75,.65),0 0 16px rgba(255,45,75,.25)!important}.bt-master-picker.bt-act-complete,.bt-act-complete#actLocationButton{border:1px solid #29d986!important;box-shadow:0 0 7px rgba(41,217,134,.65),0 0 16px rgba(41,217,134,.22)!important}`;document.head.appendChild(style)})();
+
+const BT_MASTER_SKILLS = [
+ ["Бытовая техника",[["washer","Стиральные машины"],["fridge","Холодильники"],["air_conditioner","Кондиционеры"],["microwave","Микроволновки"],["dishwasher","Посудомойки"],["vacuum","Пылесосы"],["ice_maker","Льдогенераторы"],["water_heater","Водонагреватели"],["tv_audio","ТВ / аудио / тюнеры"],["other_appliance","Прочее"]]],
+ ["Компьютеры, периферия и ПО",[["windows_install","Установка Windows"],["desktop","Настольные ПК"],["all_in_one","Моноблоки"],["laptop","Ноутбуки"],["printer","Принтеры"],["scanner","Сканеры"]]],
+ ["Монтаж / демонтаж",["air_conditioner","washer","gas_stove","electric_stove","water_heater","gas_boiler"].flatMap((x,i)=>[["install_"+x,["Кондиционер","Стиральная машина","Газовая плита","Электрическая плита","Водонагреватель","Газовый котёл"][i]+" — Монтаж"],["remove_"+x,["Кондиционер","Стиральная машина","Газовая плита","Электрическая плита","Водонагреватель","Газовый котёл"][i]+" — Демонтаж"]])]
+];
+function btLoadMasterSkills(){
+ const el=document.getElementById('masterSkillsList');if(!el)return;
+ const selected=new Set(masterCache.profile?.specializations||[]);
+ el.innerHTML=BT_MASTER_SKILLS.map(([group,items])=>'<fieldset style="margin:12px 0;padding:12px;border:1px solid #31557d;border-radius:12px"><legend>'+masterEsc(group)+'</legend>'+items.map(([code,label])=>'<label style="display:flex;gap:10px;align-items:center;padding:7px 0"><input type="checkbox" class="bt-master-skill" value="'+code+'" '+(selected.has(code)?'checked':'')+'><span>'+masterEsc(label)+'</span></label>').join('')+'</fieldset>').join('');
+}
+async function btSaveMasterSkills(){
+ const status=document.getElementById('masterSkillsStatus');
+ const selected=[...document.querySelectorAll('.bt-master-skill:checked')].map(x=>x.value);
+ if(!selected.length){if(status)status.textContent='Выберите хотя бы один вид работ.';return;}
+ try{
+  const result=await masterApi('/api/master/settings','POST',{specializations:selected});
+  if(!masterCache.profile)masterCache.profile={};
+  masterCache.profile.specializations=selected;
+  if(status)status.textContent=result.message||'Специализации сохранены.';
+ }catch(e){if(status)status.textContent=e.message||'Не удалось сохранить.';}
+}
