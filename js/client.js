@@ -1796,13 +1796,14 @@ startMasterApplicationAutoSync();
 // TEST PATCH: center-fixed pin map. No coordinates are saved until confirmation.
 let btAddressMapInstance=null,btAddressMapPoint=null,btAddressMapLabel='';
 let btMapLayers=null,btMapStyle='street';
+let btMapResolvedKey='',btMapPreviousCenter=null,btMapRecognizing=false;
 function btMapUpdateCenter(){
     if(!btAddressMapInstance)return;
     const c=btAddressMapInstance.getCenter();
     btAddressMapPoint={lat:c.lat,lon:c.lng};
     const hint=document.getElementById('btMapHint');
     if(hint)hint.textContent=`Точка: ${c.lat.toFixed(6)}, ${c.lng.toFixed(6)} · Перемещайте карту под меткой`;
-    const btn=document.getElementById('btMapConfirm');if(btn)btn.disabled=false;
+    const btn=document.getElementById('btMapConfirm');if(btn&&!btMapRecognizing)btn.disabled=false;
 }
 function btMapSetLayer(style){
     if(!btAddressMapInstance||!btMapLayers)return;
@@ -1822,15 +1823,29 @@ function btMapInitManualFields(){
     const district=document.getElementById('btMapDistrict');
     if(district&&orderData.serviceDistrict)btMapSelectKnown(district,orderData.serviceDistrict);
     const addr=document.getElementById('btMapAddressText');
-    if(addr)addr.value=orderData.mapAddress||'';
+    if(addr){addr.value=orderData.mapAddress||'';addr.dataset.auto=addr.value?'1':'0';addr.addEventListener('input',()=>{addr.dataset.auto='0';});}
 }
-function btMapNorm(v){return String(v||'').toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^a-zа-я0-9]/gi,'');}
+function btMapNorm(v){
+    return String(v||'').toLocaleLowerCase('ru').replace(/ё/g,'е')
+        .replace(/(?:город|район|область|республика|city|district|region|oblast|tumani|tuman|shahri|shahar)/gi,'')
+        .replace(/(?:ский|ская|ское|skaya|skiy|sky|iy)$/i,'')
+        .replace(/[^a-zа-я0-9]/gi,'');
+}
+function btMapLatin(v){
+    const ru={а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ж:'zh',з:'z',и:'i',й:'y',к:'k',л:'l',м:'m',н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'kh',ц:'ts',ч:'ch',ш:'sh',щ:'sh',ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'};
+    return btMapNorm(v).replace(/[а-я]/g,ch=>ru[ch]||ch).replace(/kh/g,'h').replace(/(?:skiy|skaya|ski|iy)$/,'');
+}
+function btMapSameName(a,b){
+    const x=btMapNorm(a),y=btMapNorm(b);
+    if(!x||!y)return false;
+    if(x===y||((x.length>=6&&y.length>=6)&&(x.startsWith(y)||y.startsWith(x))))return true;
+    const lx=btMapLatin(a),ly=btMapLatin(b);
+    return lx===ly||((lx.length>=6&&ly.length>=6)&&(lx.startsWith(ly)||ly.startsWith(lx)));
+}
 function btMapSelectKnown(select,value){
     if(!select||!value)return false;
-    const target=btMapNorm(value);
     const options=[...select.options].filter(x=>x.value);
-    const exact=options.find(x=>btMapNorm(x.value)===target);
-    // Do not make a guessed selection from a merely similar name.
+    const exact=options.find(x=>btMapSameName(x.value,value));
     if(exact){select.value=exact.value;return true;}
     return false;
 }
@@ -1843,26 +1858,68 @@ function btMapChangeRegion(){
     for(const name of (btMapTerritories[region.value]||[]))district.add(new Option(name,name));
     if(previous)btMapSelectKnown(district,previous);
 }
+function btMapMatchRegion(result){
+    const regionEl=document.getElementById('btMapRegion');
+    if(!regionEl)return false;
+    const raw=String(result.region||'').trim();
+    const address=String(result.address||'');
+    // Distinguish Tashkent city from Tashkent oblast. Do not silently guess.
+    if(/ташкентск(?:ая|ой)\s+област|toshkent\s+viloyat|tashkent\s+region|tashkent\s+oblast/i.test(raw+' '+address)){
+        regionEl.value='Ташкентская область';return true;
+    }
+    if(/^(ташкент|tashkent|toshkent|город ташкент|tashkent city)$/i.test(raw)||
+        (/ташкент|tashkent|toshkent/i.test(address)&&/мирзо.?улугбек|mirzo.?ulugbek|юнусабад|yunusabad|чиланзар|chilanzar|яккасарай|yakkasaroy|сергел|sergel|шайханта|shaykhant|мирабад|mirobad|алмазар|olmazor|яшнабад|yashnobod|бектемир|bektemir|учтеп|uchtepa|янгиха|yangihayot/i.test(address))){
+        regionEl.value='Ташкент (город)';return true;
+    }
+    if(btMapSelectKnown(regionEl,raw))return true;
+    const segments=address.split(',').map(v=>v.trim());
+    return segments.some(v=>btMapSelectKnown(regionEl,v));
+}
+function btMapMatchDistrict(result){
+    const districtEl=document.getElementById('btMapDistrict');
+    if(!districtEl)return false;
+    const candidates=[result.district,...String(result.address||'').split(',')];
+    for(const candidate of candidates){if(btMapSelectKnown(districtEl,candidate))return true;}
+    return false;
+}
+function btMapPointKey(p){return `${Number(p.lat).toFixed(5)}:${Number(p.lng ?? p.lon).toFixed(5)}`;}
 async function btMapRecognizeCurrentPoint(){
-    if(!btAddressMapInstance)return;
+    if(!btAddressMapInstance)return false;
     const pos=btAddressMapInstance.getCenter();
+    const key=btMapPointKey(pos);
     const hint=document.getElementById('btMapHint');
-    const btn=document.getElementById('btMapRecognize');
-    if(btn)btn.disabled=true;
-    if(hint)hint.textContent='Определяем адрес по выбранной метке…';
+    const confirm=document.getElementById('btMapConfirm');
+    if(btMapRecognizing)return false;
+    btMapRecognizing=true;
+    if(confirm){confirm.disabled=true;confirm.textContent='⏳ Определяем адрес…';}
+    if(hint)hint.textContent='Определяем адрес и район по выбранной точке…';
     try{
         const result=await clientApi('/api/map/reverse?lat='+encodeURIComponent(pos.lat)+'&lon='+encodeURIComponent(pos.lng));
+        // Prevent a slow response for an old pin from overwriting a newer one.
+        if(!btAddressMapInstance||btMapPointKey(btAddressMapInstance.getCenter())!==key)return false;
         const region=document.getElementById('btMapRegion');
         const district=document.getElementById('btMapDistrict');
         const address=document.getElementById('btMapAddressText');
-        const regionFound=Boolean(region?.value)||(btMapSelectKnown(region,result.region));
-        if(regionFound && district && district.options.length<=1)btMapChangeRegion();
-        const districtFound=Boolean(district?.value)||(regionFound&&btMapSelectKnown(district,result.district));
-        if(address&&!address.value.trim()&&result.address)address.value=result.address;
-        if(hint)hint.textContent=regionFound&&districtFound?'Адрес определён. Проверьте точность и подтвердите.':'Адрес найден частично. Выберите область и район вручную.';
+        const matchRegion=btMapMatchRegion(result);
+        if(matchRegion)btMapChangeRegion();
+        const matchDistrict=matchRegion&&btMapMatchDistrict(result);
+        if(address && result.address && (!address.value.trim()||address.dataset.auto==='1')){
+            address.value=String(result.address).slice(0,400);
+            address.dataset.auto='1';
+        }
+        btMapResolvedKey=key;
+        if(hint)hint.textContent=matchRegion&&matchDistrict
+            ?'✅ Область, район и адрес определены. Проверьте данные.'
+            :'Адрес найден, но район не распознан точно. Выберите область и район вручную ниже.';
+        return Boolean(matchRegion&&matchDistrict);
     }catch(e){
-        if(hint)hint.textContent='Не удалось распознать адрес. Выберите область и район вручную; координаты сохранятся.';
-    }finally{if(btn)btn.disabled=false;}
+        btMapResolvedKey=key;
+        if(hint)hint.textContent='Не удалось получить адрес автоматически. Выберите область, район и введите адрес вручную.';
+        return false;
+    }finally{
+        btMapRecognizing=false;
+        if(confirm){confirm.disabled=false;confirm.textContent='✓ Подтвердить адрес';}
+    }
 }
 async function btOpenAddressMap(){
     if(document.getElementById('btAddressOverlay'))return;
@@ -1877,9 +1934,9 @@ async function btOpenAddressMap(){
       <div class="bt-map-manual"><label for="btMapRegion">Область</label><select id="btMapRegion" onchange="btMapChangeRegion()"><option value="">Выберите область</option></select>
         <label for="btMapDistrict">Город / район</label><select id="btMapDistrict"><option value="">Выберите город или район</option></select>
         <label for="btMapAddressText">Адрес (можно исправить)</label><textarea id="btMapAddressText" rows="2" maxlength="400" placeholder="Улица, махалля, дом или ориентир"></textarea>
-        <button type="button" id="btMapRecognize" onclick="btMapRecognizeCurrentPoint()">🔎 Определить адрес по метке</button>
         <p class="bt-map-manual-help">Проверьте область, район и адрес. При ошибке распознавания выберите вручную.</p></div>
-      <div class="bt-address-actions"><button type="button" onclick="btCloseAddressMap()">Отмена</button><button type="button" id="btMapConfirm" onclick="btConfirmAddressMap()" disabled>✓ Подтвердить выбранную точку</button></div>
+      <p id="btMapActionFeedback" role="alert" style="display:none;margin:0;color:#ffd5a1;font-size:13px;line-height:1.4;"></p>
+      <div class="bt-address-actions"><button type="button" onclick="btCloseAddressMap()">Отмена</button><button type="button" id="btMapConfirm" onclick="btConfirmAddressMap()" disabled>✓ Подтвердить адрес</button></div>
     </div>`;
     document.body.appendChild(overlay);
     btMapInitManualFields();
@@ -1898,9 +1955,20 @@ async function btOpenAddressMap(){
             satellite:L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri and contributors'})
         };
         btMapStyle='street';btMapLayers.street.addTo(btAddressMapInstance);
+        btMapResolvedKey='';btMapPreviousCenter=null;
         btMapSetLayer('street');
         btAddressMapLabel='';
-        btAddressMapInstance.on('moveend',()=>{btAddressMapLabel='';btMapUpdateCenter();});
+        btAddressMapInstance.on('moveend',()=>{
+            const center=btAddressMapInstance.getCenter();
+            if(btMapPreviousCenter && (Math.abs(center.lat-btMapPreviousCenter.lat)>0.00015||Math.abs(center.lng-btMapPreviousCenter.lng)>0.00015)){
+                btMapResolvedKey='';
+                const r=document.getElementById('btMapRegion'),d=document.getElementById('btMapDistrict'),a=document.getElementById('btMapAddressText');
+                if(r)r.value='';if(d)btMapChangeRegion();
+                if(a){a.value='';a.dataset.auto='0';}
+            }
+            btMapPreviousCenter={lat:center.lat,lng:center.lng};
+            btAddressMapLabel='';btMapUpdateCenter();
+        });
         btMapUpdateCenter();
         setTimeout(()=>btAddressMapInstance?.invalidateSize(),100);
     }catch(e){
@@ -1954,8 +2022,13 @@ async function btSearchAddressMap(){
             item.addEventListener('click',()=>{
                 const lat=Number(place.lat),lon=Number(place.lon);
                 if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
+                const selectedAddress=String(place.address||'');
+                btAddressMapInstance?.once('moveend',()=>{
+                    const addr=document.getElementById('btMapAddressText');
+                    if(addr){addr.value=selectedAddress;addr.dataset.auto='1';}
+                });
                 btAddressMapInstance?.setView([lat,lon],17);
-                btMapUpdateCenter();btAddressMapLabel=place.address||'';const addr=document.getElementById('btMapAddressText');if(addr)addr.value=btAddressMapLabel;
+                btMapUpdateCenter();btAddressMapLabel=selectedAddress;
                 if(hint)hint.textContent='Проверьте точку на карте, при необходимости сдвиньте её и подтвердите.';
                 if(resultsBox)resultsBox.replaceChildren();
             });
@@ -1973,24 +2046,34 @@ async function btConfirmAddressMap(){
     const center=btAddressMapInstance.getCenter();
     if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
     const hint=document.getElementById('btMapHint');
+    const feedback=document.getElementById('btMapActionFeedback');
+    if(feedback){feedback.style.display='none';feedback.textContent='';}
     if(center.lat<35||center.lat>46||center.lng<55||center.lng>74){
         if(hint)hint.textContent='Выберите точку на территории Узбекистана.';return;
     }
     const regionEl=document.getElementById('btMapRegion');
     const districtEl=document.getElementById('btMapDistrict');
     const addressEl=document.getElementById('btMapAddressText');
-    // Automatically attempt reverse geocoding on confirmation when area/address is missing.
-    if(!regionEl?.value||!districtEl?.value||!addressEl?.value.trim())await btMapRecognizeCurrentPoint();
+    // A single Confirm action resolves the pin and fills all possible fields.
+    // If the provider cannot resolve the region, manual correction remains available.
+    const key=btMapPointKey(center);
+    if(btMapResolvedKey!==key){
+        await btMapRecognizeCurrentPoint();
+    }
     const region=regionEl?.value||'';
     const district=districtEl?.value||'';
     const address=addressEl?.value.trim()||'';
     if(!region||!district){
-        if(hint)hint.textContent='Для поиска мастера необходимо выбрать область и район. Если распознавание не сработало, укажите вручную.';
-        (!region?regionEl:districtEl)?.focus();return;
+        if(hint)hint.textContent='Адрес найден, но '+(!region?'область':'район')+' не удалось определить точно. Выберите '+(!region?'область и район':'район')+' в списке ниже и нажмите «Подтвердить адрес» ещё раз.';
+        if(feedback){feedback.style.display='block';feedback.textContent=hint?.textContent||'Выберите область и район вручную.';}
+        const missing=!region?regionEl:districtEl;
+        missing?.scrollIntoView?.({behavior:'smooth',block:'center'});
+        missing?.focus();return;
     }
     if(!address){
         if(hint)hint.textContent='Введите адрес или ориентир, затем подтвердите выбранную точку.';
-        addressEl?.focus();return;
+        if(feedback){feedback.style.display='block';feedback.textContent='Адрес не определён. Введите улицу, дом или ориентир.';}
+        addressEl?.scrollIntoView?.({behavior:'smooth',block:'center'});addressEl?.focus();return;
     }
     orderData.location={lat:Number(center.lat.toFixed(6)),lon:Number(center.lng.toFixed(6))};
     orderData.serviceRegion=region;
@@ -2002,7 +2085,7 @@ async function btConfirmAddressMap(){
 }
 function btCloseAddressMap(){
     if(btAddressMapInstance){btAddressMapInstance.remove();btAddressMapInstance=null;}
-    btAddressMapPoint=null;btMapLayers=null;
+    btAddressMapPoint=null;btMapLayers=null;btMapResolvedKey='';btMapPreviousCenter=null;
     document.getElementById('btAddressOverlay')?.remove();
 }
 
