@@ -1158,7 +1158,6 @@ function showNewOrder() {
             <label>Бренд</label>
             <select id="brand" class="bt-client-select" onchange="onBrandChange()">
                 <option value="">— Выберите —</option>
-                <option value="Не применимо">Не применимо</option>
                 <option value="LG">LG</option>
                 <option value="Samsung">Samsung</option>
                 <option value="Indesit">Indesit</option>
@@ -1818,6 +1817,7 @@ startMasterApplicationAutoSync();
 let btAddressMapInstance=null,btAddressMapPoint=null,btAddressMapLabel='';
 let btMapLayers=null,btMapStyle='street',btMapRecognizing=false,btMapProgrammaticMove=false;
 let btMapLastSearchQuery='';
+let btMapSearchTicket=0;
 function btMapUpdateCenter(){
     if(!btAddressMapInstance)return;
     const c=btAddressMapInstance.getCenter();
@@ -1941,7 +1941,7 @@ async function btOpenAddressMap(){
         };
         btMapStyle='street';btMapLayers.street.addTo(btAddressMapInstance);
         btMapSetLayer('street');
-        btAddressMapLabel='';btMapLastSearchQuery='';
+        btAddressMapLabel='';btMapLastSearchQuery='';btMapSearchTicket++;
         btAddressMapInstance.on('moveend',()=>{
             if(!btMapProgrammaticMove)btAddressMapLabel='';
             btMapUpdateCenter();
@@ -1997,33 +1997,67 @@ async function btSearchAddressMap(){
     const query=document.getElementById('btMapSearch')?.value.trim();
     const hint=document.getElementById('btMapHint');
     const resultsBox=document.getElementById('btMapSearchResults');
-    if(!query||query.length<3){if(hint)hint.textContent='Введите улицу, дом или ориентир (минимум 3 символа).';return;}
+    const feedback=document.getElementById('btMapActionFeedback');
+    if(!query||query.length<3){
+        if(hint)hint.textContent='Введите хотя бы три символа названия места или улицы.';
+        return;
+    }
+    if(!btAddressMapInstance)return;
+    const ticket=++btMapSearchTicket;
     const button=document.getElementById('btMapSearchButton');
-    if(hint)hint.textContent='Ищем адрес…';
+    if(hint)hint.textContent='Ищем по разным написаниям адреса…';
+    if(feedback)feedback.style.display='none';
     if(resultsBox)resultsBox.replaceChildren();
     if(button)button.disabled=true;
     try{
-        const payload=await clientApi('/api/map/geocode?q='+encodeURIComponent(query));
-        if(!document.getElementById('btAddressOverlay'))return;
+        const center=btAddressMapInstance.getCenter();
+        const params=new URLSearchParams({q:query,lat:String(center.lat),lon:String(center.lng)});
+        const payload=await clientApi('/api/map/geocode?'+params.toString());
+        if(ticket!==btMapSearchTicket||!document.getElementById('btAddressOverlay')||!btAddressMapInstance)return;
         const places=Array.isArray(payload.results)?payload.results:[];
-        if(!places.length){if(hint)hint.textContent='Ничего не найдено. Уточните запрос или выберите точку вручную.';return;}
-        // A single click on Find must actually move the map to the first search result.
+        if(!places.length){
+            if(hint)hint.textContent='Адрес не найден. Попробуйте другое написание (например, «Офарин, Кибрай») или поставьте метку на карте вручную.';
+            return;
+        }
         btMapLastSearchQuery=query;
-        btMapSelectFoundPlace(places[0]);
-        // Alternatives remain available without requiring another search.
-        if(places.length>1&&resultsBox){
-            for(const place of places.slice(1)){
+        // Automatic positioning is safe only when the result agrees with the
+        // input sufficiently. Never jump to a generic town instead of a street.
+        const meaningfulTokens=query.trim().split(/[\s,;]+/).filter(t=>t.length>=3);
+        const threshold=meaningfulTokens.length>1?3.5:1.5;
+        const confident=Number(places[0].relevance||0)>=threshold;
+        if(confident){
+            btMapSelectFoundPlace(places[0]);
+            if(hint)hint.textContent='Метка на первом подходящем результате. При необходимости выберите другой адрес ниже или сдвиньте карту.';
+        }else if(hint){
+            hint.textContent='Есть похожие места, но точного совпадения нет. Выберите нужное из списка либо передвиньте карту вручную.';
+        }
+        if(resultsBox){
+            for(const [index,place] of places.entries()){
                 const item=document.createElement('button');item.type='button';item.className='bt-map-result';
-                const title=document.createElement('span');title.className='bt-map-result-title';title.textContent=place.title||place.address||'Другой найденный адрес';
-                item.append(title);
-                item.addEventListener('click',()=>{btMapSelectFoundPlace(place);resultsBox.replaceChildren();});
+                if(index===0&&confident)item.classList.add('bt-map-result-current');
+                const title=document.createElement('span');title.className='bt-map-result-title';
+                title.textContent=place.title||place.address||'Адрес на карте';
+                const detail=document.createElement('span');detail.className='bt-map-result-detail';
+                detail.textContent=place.address||'';
+                item.append(title,detail);
+                item.addEventListener('click',()=>{
+                    if(!btAddressMapInstance)return;
+                    btMapSelectFoundPlace(place);
+                    for(const other of resultsBox.querySelectorAll('.bt-map-result'))other.classList.remove('bt-map-result-current');
+                    item.classList.add('bt-map-result-current');
+                });
                 resultsBox.append(item);
             }
         }
     }catch(e){
-        if(hint)hint.textContent='Поиск адресов временно недоступен. Передвиньте карту вручную.';
+        if(ticket===btMapSearchTicket&&hint)
+            hint.textContent='Сервис поиска временно недоступен. Можно выбрать точку вручную на карте и подтвердить адрес.';
+        if(ticket===btMapSearchTicket&&feedback){
+            feedback.textContent=e.message||'Ошибка сервиса определения адреса';
+            feedback.style.display='block';
+        }
         console.warn('Address search failed',e);
-    }finally{if(button)button.disabled=false;}
+    }finally{if(button&&ticket===btMapSearchTicket)button.disabled=false;}
 }
 async function btConfirmAddressMap(){
     if(!btAddressMapInstance||btMapRecognizing)return;
@@ -2050,69 +2084,97 @@ async function btConfirmAddressMap(){
 }
 function btCloseAddressMap(){
     if(btAddressMapInstance){btAddressMapInstance.remove();btAddressMapInstance=null;}
-    btAddressMapPoint=null;btMapLayers=null;btMapRecognizing=false;btMapProgrammaticMove=false;
+    btAddressMapPoint=null;btMapLayers=null;btMapRecognizing=false;btMapProgrammaticMove=false;btMapSearchTicket++;
     document.getElementById('btAddressOverlay')?.remove();
 }
 
 // Patch 06: choose an eligible master; broadcast will be enabled in patch 07.
 function btChooseMarketplaceMaster(masters){
   return new Promise(resolve=>{
-    const shade=document.createElement('div');
-    shade.className='bt-marketplace-shade';
-    const panel=document.createElement('div');
-    panel.className='bt-marketplace-panel';
+    const shade=document.createElement('div');shade.className='bt-marketplace-shade';
+    const panel=document.createElement('div');panel.className='bt-marketplace-panel bt-marketplace-panel-v13';
     const finish=value=>{shade.remove();resolve(value)};
-    const makeBtn=(label,cls,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.className=cls;b.onclick=action;return b;};
+    const makeBtn=(label,cls,action)=>{
+      const b=document.createElement('button');b.type='button';b.className=cls;
+      b.textContent=label;b.addEventListener('click',e=>{e.stopPropagation();action();});return b;
+    };
+    const heading=document.createElement('div');heading.className='bt-marketplace-header';
+    const title=document.createElement('h3');title.textContent='Выберите мастера';
+    const count=document.createElement('p');count.textContent='Подходящих мастеров: '+masters.length+' · нажмите на карточку для подробностей';
+    heading.append(title,count);panel.append(heading);
 
     const own=masters.find(m=>m.my_master);
-    const header=document.createElement('div');header.className='bt-marketplace-header';
-    header.innerHTML='<div><h3>Выберите мастера</h3><p>Список подходящих мастеров по выбранной услуге.</p></div>';
-    panel.append(header);
-
     if(own){
       const ownWrap=document.createElement('div');ownWrap.className='bt-marketplace-top-actions';
       ownWrap.append(makeBtn('👨‍🔧 Вызвать моего мастера','bt-marketplace-wide-btn',()=>finish(own.master_id)));
       panel.append(ownWrap);
     }
-
     const list=document.createElement('div');list.className='bt-marketplace-list';
-    if(!masters.length){
-      const empty=document.createElement('div');empty.className='bt-marketplace-empty';
-      empty.textContent='В вашем районе пока нет подходящих мастеров.';
-      list.append(empty);
-    }
-
-    for(const m of masters){
-      const card=document.createElement('article');card.className='bt-marketplace-card';
-      const top=document.createElement('div');top.className='bt-marketplace-card-top';
-      if(typeof m.avatar==='string' && m.avatar.startsWith('data:image/jpeg;base64,') && m.avatar.length<=180000){
-        const avatar=document.createElement('img');avatar.src=m.avatar;avatar.alt='Фото мастера';avatar.className='bt-marketplace-avatar';top.append(avatar);
+    const details=document.createElement('section');details.className='bt-marketplace-detail-view';details.hidden=true;
+    const openDetail=m=>{
+      list.hidden=true;details.hidden=false;details.replaceChildren();
+      const back=makeBtn('← К списку мастеров','bt-marketplace-detail-back',()=>{
+        details.hidden=true;list.hidden=false;details.replaceChildren();
+      });
+      details.append(back);
+      const block=document.createElement('div');block.className='bt-marketplace-detail-content';
+      const h=document.createElement('h3');h.textContent=String(m.name||'Мастер');block.append(h);
+      const add=(text)=>{const p=document.createElement('p');p.textContent=text;block.append(p);};
+      add('⭐ '+(Number(m.rating)>0?Number(m.rating).toFixed(1):'Нет оценок')+' · '+Number(m.review_count||0)+' отзывов');
+      add('📍 '+String(m.district||'Район не указан'));
+      add('🧾 '+Number(m.issued_acts||0)+' выданных актов по выбранной услуге');
+      add('💰 Выезд и диагностика: '+Number(m.diagnostic_price_uzs||0).toLocaleString('ru-RU')+' сум');
+      if(m.about)add(String(m.about));
+      const rh=document.createElement('h4');rh.textContent='Отзывы';block.append(rh);
+      const reviews=Array.isArray(m.reviews)?m.reviews:[];
+      if(!reviews.length){add('Пока нет опубликованных отзывов.');}
+      else for(const review of reviews.slice(0,40)){
+        const item=document.createElement('article');item.className='bt-marketplace-review';
+        const rhead=document.createElement('strong');
+        const rating=Math.min(5,Math.max(1,Number(review.rating)||1));
+        rhead.textContent='⭐'.repeat(rating)+(review.created_at?' · '+String(review.created_at).slice(0,10):'');
+        const body=document.createElement('p');body.textContent=String(review.text||'Без комментария');
+        item.append(rhead,body);block.append(item);
       }
-      const detail=document.createElement('div');detail.className='bt-marketplace-main';
-      detail.innerHTML=`<strong>${escapeClient(String(m.name||'Мастер'))}</strong><div class="bt-marketplace-rating">⭐ ${(Number(m.rating)>0?Number(m.rating).toFixed(1):'Нет оценок')} · ${Number(m.review_count||0)} отзывов</div>`;
-      top.append(detail);
-      card.append(top);
-      const info=document.createElement('div');info.className='bt-marketplace-meta';
-      info.innerHTML=`<span>📍 ${escapeClient(String(m.district||'—'))}</span><span>🧾 ${Number(m.issued_acts||0)} актов</span><span>💰 ${Number(m.diagnostic_price_uzs||0).toLocaleString('ru-RU')} сум</span>`;
-      card.append(info);
-      const actions=document.createElement('div');actions.className='bt-marketplace-actions';
-      actions.append(makeBtn('Выбрать','bt-marketplace-action-primary',()=>finish(m.master_id)));
-      actions.append(makeBtn('Отзывы и информация','bt-marketplace-action-secondary',()=>{
-        const old=card.querySelector('.bt-marketplace-details');if(old){old.remove();return}
-        const more=document.createElement('div');more.className='bt-marketplace-details';
-        more.innerHTML=`<p>${escapeClient(String(m.about||'Мастер пока не добавил информацию о себе.'))}</p><p>Рейтинг: ${(Number(m.rating)>0?Number(m.rating).toFixed(1):'пока нет')} · Отзывов: ${Number(m.review_count||0)}</p>`;
-        card.append(more);
-      }));
-      card.append(actions);
-      list.append(card);
+      details.append(block,makeBtn('Выбрать этого мастера','bt-marketplace-detail-select',()=>finish(m.master_id)));
+      details.scrollTop=0;
+    };
+    if(!masters.length){
+      const empty=document.createElement('p');empty.className='bt-marketplace-empty';
+      empty.textContent='В вашем районе пока нет подходящих мастеров.';list.append(empty);
     }
-    panel.append(list);
-
+    for(const m of masters){
+      const card=document.createElement('article');
+      card.className='bt-marketplace-card bt-marketplace-card-v13';
+      card.tabIndex=0;card.setAttribute('role','button');
+      card.setAttribute('aria-label','Информация о мастере '+String(m.name||'Мастер'));
+      card.addEventListener('click',()=>openDetail(m));
+      card.addEventListener('keydown',e=>{
+        if(e.target!==card)return;
+        if(e.key==='Enter'||e.key===' '){e.preventDefault();openDetail(m);}
+      });
+      const avatar=document.createElement('div');avatar.className='bt-marketplace-avatar bt-marketplace-avatar-v13';
+      if(typeof m.avatar==='string'&&m.avatar.startsWith('data:image/jpeg;base64,')&&m.avatar.length<=180000){
+        const pic=document.createElement('img');pic.src=m.avatar;pic.alt='';avatar.append(pic);
+      }else avatar.textContent=String(m.name||'М').trim().slice(0,1).toUpperCase();
+      const content=document.createElement('div');content.className='bt-marketplace-card-info';
+      const name=document.createElement('strong');name.textContent=String(m.name||'Мастер');
+      const rating=document.createElement('span');rating.className='bt-marketplace-rating';
+      rating.textContent='⭐ '+(Number(m.rating)>0?Number(m.rating).toFixed(1):'Нет оценок')+' · '+Number(m.review_count||0)+' отзывов';
+      const facts=document.createElement('div');facts.className='bt-marketplace-card-facts';
+      const district=document.createElement('span');district.textContent='📍 '+String(m.district||'—');
+      const experience=document.createElement('span');experience.textContent='🧾 '+Number(m.issued_acts||0)+' актов';
+      const price=document.createElement('span');price.textContent='💰 '+Number(m.diagnostic_price_uzs||0).toLocaleString('ru-RU')+' сум';
+      facts.append(district,experience,price);content.append(name,rating,facts);
+      const select=makeBtn('Выбрать','bt-marketplace-card-select',()=>finish(m.master_id));
+      card.append(avatar,content,select);list.append(card);
+    }
+    panel.append(list,details);
     const footer=document.createElement('div');footer.className='bt-marketplace-footer';
     footer.append(makeBtn('⚡ Найти свободного мастера','bt-marketplace-wide-btn',()=>finish('public')));
     footer.append(makeBtn('Назад к заявке','bt-marketplace-back-btn',()=>finish(null)));
     panel.append(footer);
-
+    shade.addEventListener('click',e=>{if(e.target===shade)finish(null)});
     shade.append(panel);document.body.append(shade);
   });
 }
