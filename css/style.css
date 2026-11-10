@@ -1313,3 +1313,35 @@ body.bt-order-page .bt-map-open{margin-top:9px!important}
 .bt-legal-overlay{position:fixed;inset:0;z-index:99999;background:rgba(3,9,21,.88);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:14px;overflow-y:auto}
 .bt-legal-dialog{width:min(100%,440px);max-height:95vh;overflow-y:auto;box-sizing:border-box;border:1px solid #2e8dc5;border-radius:23px;padding:22px 18px;color:#edf8ff;background:linear-gradient(155deg,#102f4c,#081522 70%);box-shadow:0 0 35px #168fcb44;text-align:center}
 .bt-legal-logo{width:70px;height:70px;object-fit:contain;display:block;margin:0 auto 6px}.bt-legal-shield{font-size:28px}.bt-legal-dialog h2{font-size:21px;line-height:1.25;margin:8px 0}.bt-legal-dialog p{line-height:1.48;font-size:14px}.bt-legal-facts{text-align:left;border:1px solid #2a5775;background:#10283d;border-radius:14px;padding:7px 13px;margin:14px 0}.bt-legal-facts p{margin:10px 0}.bt-legal-read{display:block;padding:12px 6px;color:#74dfff!important;text-decoration:underline!important;font-weight:600}.bt-legal-version{font-size:11px!important;color:#b2c6d4}.bt-legal-accept{width:100%;border-radius:12px!important;background:#116dc0!important;color:white!important;font-weight:700!important;padding:15px!important}.bt-legal-later{background:transparent!important;border:0!important;color:#b4cbdc!important;margin-top:7px!important}.bt-legal-error{color:#ffb3b3!important}
+
+/* 2026-11-10: Map modal usable in short Telegram webviews. */
+#btAddressOverlay.bt-address-overlay{
+  box-sizing:border-box!important;position:fixed!important;inset:0!important;
+  display:flex!important;align-items:flex-start!important;justify-content:center!important;
+  overflow-y:auto!important;overscroll-behavior:contain!important;
+  -webkit-overflow-scrolling:touch!important;
+  padding:calc(12px + env(safe-area-inset-top)) 10px calc(18px + env(safe-area-inset-bottom))!important;
+}
+#btAddressOverlay .bt-address-dialog{
+  box-sizing:border-box!important;display:flex!important;flex-direction:column!important;
+  width:min(100%,640px)!important;min-width:0!important;max-height:none!important;
+  height:auto!important;overflow:visible!important;flex:0 0 auto!important;
+  margin:0 auto 15px!important;padding:12px!important;
+}
+#btAddressOverlay .bt-map-stage{flex:none!important;min-height:0!important;height:clamp(210px,32dvh,340px)!important;overflow:hidden!important}
+#btAddressOverlay .bt-map-stage #btAddressMap{height:100%!important;min-height:0!important;width:100%!important}
+#btAddressOverlay .bt-map-search-actions{flex-direction:row!important;flex-wrap:wrap!important}
+#btAddressOverlay .bt-map-search-actions button{flex:1 1 145px!important;white-space:normal!important}
+#btAddressOverlay .bt-map-manual{display:flex;flex-direction:column;gap:6px;min-width:0;padding:3px 0 6px}
+#btAddressOverlay .bt-map-manual label{margin:4px 0 0!important;font-size:13px!important;font-weight:700}
+#btAddressOverlay .bt-map-manual select,#btAddressOverlay .bt-map-manual textarea{
+  display:block;box-sizing:border-box;width:100%!important;min-width:0!important;max-width:100%!important;
+  margin:0!important;padding:11px!important;background:#071629!important;color:#edf7ff!important;
+  border:1px solid #446c98!important;border-radius:11px!important;font-size:15px!important;line-height:1.4!important
+}
+#btAddressOverlay .bt-map-manual textarea{resize:vertical!important;min-height:66px!important}
+#btAddressOverlay .bt-map-manual-help{margin:0!important;color:#bfd6ee;font-size:12px;line-height:1.35}
+#btAddressOverlay #btMapRecognize{width:100%!important;min-height:42px!important;white-space:normal!important;background:#15558b!important}
+#btAddressOverlay .bt-address-actions{display:flex!important;flex-wrap:wrap!important;gap:8px!important;flex-shrink:0!important;position:relative!important}
+#btAddressOverlay .bt-address-actions button{flex:1 1 135px!important;white-space:normal!important;min-width:0!important}
+#btAddressOverlay .bt-address-top{position:relative!important;min-height:38px!important}
