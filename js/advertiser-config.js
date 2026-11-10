@@ -1,2 +1,2 @@
 // Автоматически обновляется start_cloudflare_auto.py. Не редактируйте вручную.
-window.REMONT_ADVERTISER_API_BASE = "https://comm-dui-membrane-generate.trycloudflare.com";
+window.REMONT_ADVERTISER_API_BASE = "https://dad-solution-lawrence-attorneys.trycloudflare.com";
