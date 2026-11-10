@@ -1776,7 +1776,8 @@ async function submitOrder() {
     if (service_code && serviceRegion && serviceDistrict) {
         try {
             const matching=await clientApi('/api/client/marketplace-masters?service_code='+encodeURIComponent(service_code)
-                +'&region='+encodeURIComponent(serviceRegion)+'&district='+encodeURIComponent(serviceDistrict));
+                +'&region='+encodeURIComponent(serviceRegion)+'&district='+encodeURIComponent(serviceDistrict)
+                +'&promo_code='+encodeURIComponent(data.promo_code || ''));
             const masters=matching.masters||[];
             const selected=await btChooseMarketplaceMaster(masters);
             if(selected===null)return;
