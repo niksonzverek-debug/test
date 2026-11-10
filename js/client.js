@@ -1298,14 +1298,14 @@ const btClientPickerIcons={
 };
 function btRenderStyledClientPicker(selectId){
     const native=document.getElementById(selectId);if(!native)return;
-    const oldPicker=document.getElementById(selectId+'StyledPicker');
-    if(oldPicker){oldPicker.remove();delete native.dataset.enhanced;}
-    if(native.dataset.enhanced)return;
-    const choices=[...native.options].filter(option=>option.value);
+    document.getElementById(selectId+'StyledPicker')?.remove();
+    native.classList.remove('bt-enhanced-native-select');delete native.dataset.enhanced;
+    const choices=[...native.options].filter(option=>option.value && !option.disabled);
+    if(!choices.length){native.style.display='';return;}
     const prefix=selectId==='device'?'device':selectId==='brand'?'brand':'';
     const options=choices.map((option,i)=>{
         const icon=prefix?(btClientPickerIcons[prefix]?.[i]||'🔧'):selectId==='when_date'?'◷':'◉';
-        return `<button type="button" class="bt-client-picker-option" role="option" data-picker-value="${escapeClient(option.value)}" onclick="btChooseClientPicker('${selectId}',this)"><span class="bt-master-choice-icon">${escapeClient(icon)}</span><span>${escapeClient(option.textContent.replace(/^\s*[📻🧺❄🌬✏️]+\s*/u,'').trim())}</span><span aria-hidden="true">✓</span></button>`;
+        return `<button type="button" class="bt-client-picker-option${option.value===native.value?' selected':''}" role="option" aria-selected="${option.value===native.value}" data-picker-value="${escapeClient(option.value)}" onclick="btChooseClientPicker('${selectId}',this)"><span class="bt-master-choice-icon">${escapeClient(icon)}</span><span>${escapeClient(option.textContent.trim())}</span><span aria-hidden="true">✓</span></button>`;
     }).join('');
     const summary=choices.find(o=>o.value===native.value)?.textContent||'Выберите вариант';
     const details=document.createElement('details');details.className='bt-client-picker';details.id=selectId+'StyledPicker';
@@ -1315,10 +1315,11 @@ function btRenderStyledClientPicker(selectId){
 function btChooseClientPicker(selectId,button){
     const native=document.getElementById(selectId);if(!native)return;
     native.value=button.dataset.pickerValue;
+    if(native.value!==button.dataset.pickerValue)return;
     btClientUpdateSubmitGlow();
     document.getElementById(selectId+'StyledPicker').open=false;
     document.getElementById(selectId+'StyledSummary').textContent=button.querySelector('span:nth-child(2)')?.textContent||native.value;
-    for(const other of document.querySelectorAll(`#${selectId}StyledPicker .bt-client-picker-option`))other.classList.toggle('selected',other===button);
+    for(const other of document.querySelectorAll(`#${selectId}StyledPicker .bt-client-picker-option`)){other.classList.toggle('selected',other===button);other.setAttribute('aria-selected',String(other===button));}
     native.dispatchEvent(new Event('change',{bubbles:true}));
 }
 function btEnhanceClientOrderPickers(){['brand','when_date','when_time'].forEach(btRenderStyledClientPicker);}
@@ -1395,6 +1396,8 @@ function btServiceDirectionChanged(){
   delete select.dataset.enhanced;
   select.removeAttribute('style');
   btRenderStyledClientPicker('device');
+  const picker=document.getElementById('deviceStyledPicker');
+  if(!picker)select.style.display='';
   btClientUpdateSubmitGlow();
 }
 function btClientUpdateSubmitGlow(){
@@ -1572,7 +1575,7 @@ async function submitOrder() {
 
     if (!when_date) return showAlert('Выберите дату');
     if (!when_time) return showAlert('Выберите время');
-    if (!orderData.location) return showAlert('Выберите точку ремонта на карте');
+    if (!orderData.location || !Number.isFinite(Number(orderData.location.lat)) || !Number.isFinite(Number(orderData.location.lon))) return showAlert('Выберите точку ремонта на карте');
 
     try {
         localStorage.setItem('remont_bt_house', house);
@@ -1926,10 +1929,10 @@ async function btConfirmAddressMap(){
     orderData.location={lat:Number(center.lat.toFixed(6)),lon:Number(center.lng.toFixed(6))};
     orderData.serviceRegion=verified?.verified ? String(verified.region||'') : '';
     orderData.serviceDistrict=verified?.verified ? String(verified.district||'') : '';
-    orderData.mapAddress=verified?.address || btAddressMapLabel || document.getElementById('btMapSearch')?.value.trim() || '';
+    orderData.mapAddress=verified?.address || btAddressMapLabel || '';
     const status=document.getElementById('location_status');
     if(status){
-      status.textContent=verified?.verified ? '✅ Точка сохранена: '+orderData.serviceDistrict : '✅ Точка сохранена. Район не определён автоматически; заявка будет отправлена без районного поиска.';
+      status.textContent='✅ Точка сохранена ('+orderData.location.lat.toFixed(6)+', '+orderData.location.lon.toFixed(6)+')'+(verified?.verified?' · '+orderData.serviceDistrict:' · Район пока не определён');
       status.style.color='#43dba1';
     }
     btCloseAddressMap();btClientUpdateSubmitGlow();
