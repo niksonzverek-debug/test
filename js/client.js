@@ -411,7 +411,9 @@ function queueMasterApplication(data) {
     items.push({
         operation_id: (typeof uuidV4 === 'function' ? uuidV4() : `${Date.now()}-${Math.random()}`),
         telegram_user_id: uid,
-        payload: {name:data.name, phone:data.phone, gender:data.gender, birth_date:data.birth_date, pinfl:data.pinfl},
+        payload: {name:data.name, phone:data.phone, gender:data.gender, birth_date:data.birth_date, pinfl:data.pinfl,
+                  specializations:[...(data.specializations || [])], service_region:data.service_region,
+                  service_district:data.service_district, diagnostic_price:data.diagnostic_price},
         queued_at: new Date().toISOString(),
         attempts: 0,
         status: 'pending'
@@ -450,6 +452,18 @@ async function syncMasterApplicationQueue() {
     const items = getMasterApplicationQueue();
     const item = items.find(x => String(x.telegram_user_id || '') === uid && x.status === 'pending');
     if (!item) return;
+    // Legacy queued one-step applications have no specialization or territory.
+    // Never spam the API or silently replace them with guessed values.
+    if (!Array.isArray(item.payload?.specializations) || !item.payload.specializations.length ||
+        !item.payload.service_region || !item.payload.service_district ||
+        item.payload.diagnostic_price === undefined || item.payload.diagnostic_price === null) {
+        item.status = 'blocked';
+        item.last_error = 'Для заявки нужны специализации, район и стоимость диагностики. Откройте регистрацию мастера и заполните шаги 2 и 3.';
+        saveMasterApplicationQueue(items);
+        const st = document.getElementById('masterApplicationStatus');
+        if (st) { st.textContent = item.last_error; st.className = 'error'; }
+        return;
+    }
     masterApplicationSyncInProgress = true;
     try {
         const result = await clientApi('/api/master/apply', 'POST', item.payload);
@@ -505,80 +519,191 @@ window.addEventListener('focus', startMasterApplicationAutoSync);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) startMasterApplicationAutoSync(); });
 setInterval(startMasterApplicationAutoSync, 15000);
 
-function showMasterApplicationForm() {
-    // The previous version kept the full master application (including PINFL) as a reusable local draft.
-    // Pending offline submissions now live in a separate, automatically synchronized queue.
-    let saved = {};
-    try { localStorage.removeItem('remont_bt_master_application'); } catch (_) {}
-    setPage('🧑‍🔧 Заявка мастера', `<p class="subtitle">Укажите ФИО, телефон и данные для проверки ПИНФЛ. Пол и дата рождения сверяются с первыми цифрами ПИНФЛ. После проверки заявка уйдёт администратору; доступ выдаётся только после одобрения и привязывается к вашему Telegram ID.</p>
-      <form id="masterApplicationForm" class="card master-auth-card">
-        <label for="masterApplicationName">ФИО *</label><input id="masterApplicationName" name="name" required minlength="2" maxlength="150" autocomplete="name" value="${escapeClient(saved.name || localStorage.getItem('remont_bt_name') || '')}">
-        <label for="masterApplicationPhone">Телефон *</label><input id="masterApplicationPhone" name="phone" required type="tel" inputmode="tel" autocomplete="tel" placeholder="+998 90 123 45 67" value="${escapeClient(saved.phone || localStorage.getItem('remont_bt_phone') || '')}">
-        <label for="masterApplicationGender">Пол *</label><select id="masterApplicationGender" name="gender" required><option value="">Выберите пол</option><option value="Мужской" ${saved.gender==='Мужской'?'selected':''}>Мужской</option><option value="Женский" ${saved.gender==='Женский'?'selected':''}>Женский</option></select>
-        <label for="masterApplicationBirthDate">Дата рождения *</label><input id="masterApplicationBirthDate" name="birth_date" required inputmode="numeric" autocomplete="bday" placeholder="ДДММГГГГ или ДД.ММ.ГГГГ" value="${escapeClient(saved.birth_date || '')}">
-        <label for="masterApplicationPinfl">ПИНФЛ (14 цифр) *</label><input id="masterApplicationPinfl" name="pinfl" required inputmode="numeric" autocomplete="off" minlength="14" maxlength="14" pattern="[0-9]{14}" placeholder="14 цифр" value="${escapeClient(saved.pinfl || '')}">
-        <button type="submit">Проверить данные и отправить заявку</button><p id="masterApplicationStatus" class="subtitle" role="status"></p>
-      </form>`);
-    // Phone is already verified in Telegram before either cabinet is opened.
-    clientApi('/api/client/profile').then(d => {
-        const phone = d?.profile?.phone;
-        const field = document.getElementById('masterApplicationPhone');
-        if (phone && field) { field.value = phone; field.readOnly = true; }
-    }).catch(() => {});
-    const form=document.getElementById('masterApplicationForm');
-    form?.addEventListener('submit',e=>{e.preventDefault();submitMasterApplication(form);});
-    const birthInput = document.getElementById('masterApplicationBirthDate');
-    birthInput?.addEventListener('blur', () => {
-      const normalized = normalizeMasterBirthDate(birthInput.value);
-      if (normalized) birthInput.value = normalized;
+// The client-to-master path uses the SAME three required steps as a new master.
+// The server remains authoritative on skills, territory and price limits.
+const BT_CLIENT_MASTER_DEFAULT_SKILLS = {"Бытовая техника":{"washer":"Стиральные машины","fridge":"Холодильники","air_conditioner":"Кондиционеры","microwave":"Микроволновки","dishwasher":"Посудомойки","vacuum":"Пылесосы","ice_maker":"Льдогенераторы","water_heater":"Водонагреватели","tv_audio":"ТВ / аудио / тюнеры","other_appliance":"Прочее"},"Компьютеры, периферия и ПО":{"windows_install":"Установка Windows","desktop":"Настольные ПК","all_in_one":"Моноблоки","laptop":"Ноутбуки","printer":"Принтеры","scanner":"Сканеры"},"Монтаж / демонтаж":{"install_air_conditioner":"Кондиционер — Монтаж","remove_air_conditioner":"Кондиционер — Демонтаж","install_washer":"Стиральная машина — Монтаж","remove_washer":"Стиральная машина — Демонтаж","install_gas_stove":"Газовая плита — Монтаж","remove_gas_stove":"Газовая плита — Демонтаж","install_electric_stove":"Электрическая плита — Монтаж","remove_electric_stove":"Электрическая плита — Демонтаж","install_water_heater":"Водонагреватель — Монтаж","remove_water_heater":"Водонагреватель — Демонтаж","install_gas_boiler":"Газовый котёл — Монтаж","remove_gas_boiler":"Газовый котёл — Демонтаж"}};
+let btClientMasterApplyStep = 1;
+function btClientMasterCheckedSkills(){
+    return [...document.querySelectorAll('#masterApplicationSkills input[name="masterApplySkill"]:checked')].map(el=>el.value);
+}
+function btClientMasterSkillCounts(){
+    document.querySelectorAll('#masterApplicationSkills details').forEach(section=>{
+        const count=section.querySelectorAll('input[name="masterApplySkill"]:checked').length;
+        const total=section.querySelectorAll('input[name="masterApplySkill"]').length;
+        const label=section.querySelector('[data-master-apply-count]');
+        if(label)label.textContent=`${count} из ${total}`;
     });
-    const uid = currentMasterApplicationOwner();
-    const queued = getMasterApplicationQueue().find(x => String(x.telegram_user_id || '') === uid && ['pending','blocked'].includes(x.status));
-    if (queued) {
-      const status = document.getElementById('masterApplicationStatus');
-      const button = form?.querySelector('button[type="submit"]');
-      if (queued.status === 'pending') {
-        if (status) { status.textContent='Есть заявка, ожидающая отправки. Она отправится автоматически при восстановлении связи.'; status.className='notice'; }
-        if (button) { button.textContent='⏳ Заявка ожидает отправки'; button.disabled=true; }
-      } else {
-        if (status) { status.textContent=`Не удалось автоматически отправить сохранённую заявку: ${queued.last_error || 'проверьте авторизацию Telegram и данные'}. Исправьте данные и отправьте снова.`; status.className='error'; }
-        if (button) { button.textContent='Проверить данные и отправить заявку'; button.disabled=false; }
-      }
+}
+function btClientMasterRenderSkills(groups){
+    const holder=document.getElementById('masterApplicationSkills');if(!holder)return;
+    const old=new Set(btClientMasterCheckedSkills());
+    holder.innerHTML=Object.entries(groups).map(([group,items],i)=>{
+        if(!items || typeof items!=='object')return '';
+        const rows=Object.entries(items).map(([code,label])=>`<label class="bt-client-master-skill"><input type="checkbox" name="masterApplySkill" value="${escapeClient(code)}" ${old.has(code)?'checked':''}><span>${escapeClient(label)}</span></label>`).join('');
+        return `<details class="bt-client-master-skill-group" ${i===0?'open':''}><summary><strong>${escapeClient(group)}</strong><small data-master-apply-count>0 из ${Object.keys(items).length}</small></summary><div class="bt-client-master-skill-rows">${rows}</div></details>`;
+    }).join('');
+    holder.querySelectorAll('input[name="masterApplySkill"]').forEach(box=>box.addEventListener('change',btClientMasterSkillCounts));
+    btClientMasterSkillCounts();
+}
+function btClientMasterRenderTerritories(regions){
+    const region=document.getElementById('masterApplicationRegion');
+    if(!region || !regions || typeof regions!=='object')return;
+    const prior=region.value;
+    region.replaceChildren(new Option('Выберите область',''));
+    for(const name of Object.keys(regions))region.add(new Option(name,name));
+    if(regions[prior])region.value=prior;
+    window.btClientMasterTerritoryCatalog=regions;
+    btClientMasterRegionChanged();
+}
+function btClientMasterRegionChanged(){
+    const region=document.getElementById('masterApplicationRegion')?.value||'';
+    const district=document.getElementById('masterApplicationDistrict');if(!district)return;
+    const prior=district.value;
+    district.replaceChildren(new Option('Выберите город или район',''));
+    const options=(window.btClientMasterTerritoryCatalog||btMapTerritories)[region]||[];
+    for(const name of options)district.add(new Option(name,name));
+    if(options.includes(prior))district.value=prior;
+}
+function btClientMasterShowStep(step){
+    btClientMasterApplyStep=step;
+    document.querySelectorAll('#masterApplicationForm [data-master-apply-step]').forEach(el=>{
+        el.hidden=Number(el.dataset.masterApplyStep)!==step;
+    });
+    const counter=document.getElementById('masterApplicationStepCounter');
+    if(counter)counter.textContent=`Шаг ${step} из 3`;
+    const st=document.getElementById('masterApplicationStatus');
+    if(st && step!==3){st.textContent='';st.className='subtitle';}
+    document.getElementById('masterApplicationForm')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function btClientMasterPersonalData(){
+    const form=document.getElementById('masterApplicationForm');
+    const data=Object.fromEntries(new FormData(form).entries());
+    data.name=String(data.name||'').trim();data.phone=cleanPhone(data.phone);
+    data.gender=String(data.gender||'').trim();data.birth_date=normalizeMasterBirthDate(data.birth_date);
+    data.pinfl=String(data.pinfl||'').replace(/\D/g,'');
+    if(data.name.length<2)throw Error('Введите ФИО.');
+    if(!validPhone(data.phone))throw Error('Введите корректный номер +998XXXXXXXXX.');
+    if(!['Мужской','Женский'].includes(data.gender))throw Error('Выберите пол.');
+    if(!data.birth_date)throw Error('Неверная дата рождения. Формат ДД.ММ.ГГГГ.');
+    if(!/^\d{14}$/.test(data.pinfl))throw Error('ПИНФЛ должен содержать ровно 14 цифр.');
+    const first=Number(data.pinfl[0]);
+    const map={3:['Мужской',1900],4:['Женский',1900],5:['Мужской',2000],6:['Женский',2000]};
+    const pin=map[first];if(!pin)throw Error('Первая цифра ПИНФЛ не соответствует допустимому формату.');
+    const pinDate=`${data.pinfl.slice(1,3)}.${data.pinfl.slice(3,5)}.${pin[1]+Number(data.pinfl.slice(5,7))}`;
+    if(pin[0]!==data.gender||pinDate!==data.birth_date)throw Error(`Проверьте данные: по ПИНФЛ указаны пол ${pin[0]} и дата рождения ${pinDate}.`);
+    return data;
+}
+function btClientMasterNextStep(from){
+    try{
+        if(from===1)btClientMasterPersonalData();
+        if(from===2 && !btClientMasterCheckedSkills().length)throw Error('Выберите хотя бы одну специализацию.');
+        const st=document.getElementById('masterApplicationStatus');
+        if(st){st.textContent='';st.className='subtitle';}
+        btClientMasterShowStep(from+1);
+    }catch(err){showAlert(err.message||'Проверьте данные на этом шаге.');}
+}
+function showMasterApplicationForm() {
+    const saved={};
+    // The client's original account and repair history must stay intact.
+    setPage('🧑‍🔧 Заявка мастера', `<p class="subtitle">Регистрация мастера в 3 шага. Ваш клиентский аккаунт и история сохраняются. После проверки заявку рассмотрит администратор.</p>
+      <form id="masterApplicationForm" class="card master-auth-card bt-client-master-apply-form">
+        <h2 id="masterApplicationStepCounter">Шаг 1 из 3</h2>
+        <section data-master-apply-step="1">
+          <h3>Личные данные</h3>
+          <label for="masterApplicationName">ФИО *</label><input id="masterApplicationName" name="name" required minlength="2" maxlength="150" autocomplete="name" value="${escapeClient(saved.name||localStorage.getItem('remont_bt_name')||'')}">
+          <label for="masterApplicationPhone">Телефон *</label><input id="masterApplicationPhone" name="phone" required type="tel" inputmode="tel" autocomplete="tel" placeholder="+998 90 123 45 67" value="${escapeClient(saved.phone||localStorage.getItem('remont_bt_phone')||'')}">
+          <label for="masterApplicationGender">Пол *</label><select id="masterApplicationGender" name="gender" required><option value="">Выберите пол</option><option value="Мужской">Мужской</option><option value="Женский">Женский</option></select>
+          <label for="masterApplicationBirthDate">Дата рождения *</label><input id="masterApplicationBirthDate" name="birth_date" required inputmode="numeric" autocomplete="bday" placeholder="ДД.ММ.ГГГГ">
+          <label for="masterApplicationPinfl">ПИНФЛ (14 цифр) *</label><input id="masterApplicationPinfl" name="pinfl" required inputmode="numeric" autocomplete="off" minlength="14" maxlength="14" pattern="[0-9]{14}" placeholder="14 цифр">
+          <button type="button" onclick="btClientMasterNextStep(1)">Далее — специализации →</button>
+        </section>
+        <section data-master-apply-step="2" hidden>
+          <h3>Мои специализации</h3><p class="subtitle">Можно выбрать несколько видов работ. Нажмите на категорию, чтобы раскрыть список.</p>
+          <div id="masterApplicationSkills"></div>
+          <div class="bt-client-master-apply-nav"><button type="button" class="secondary" onclick="btClientMasterShowStep(1)">← Назад</button><button type="button" onclick="btClientMasterNextStep(2)">Далее →</button></div>
+        </section>
+        <section data-master-apply-step="3" hidden>
+          <h3>Территория и диагностика</h3>
+          <label for="masterApplicationRegion">Область *</label><select id="masterApplicationRegion" name="service_region" required onchange="btClientMasterRegionChanged()"><option value="">Выберите область</option></select>
+          <label for="masterApplicationDistrict">Город / район *</label><select id="masterApplicationDistrict" name="service_district" required><option value="">Выберите город или район</option></select>
+          <label for="masterApplicationPrice">Выезд и диагностика, сум *</label><input id="masterApplicationPrice" name="diagnostic_price" required type="number" min="0" max="200000" step="1" inputmode="numeric" placeholder="Например, 100000">
+          <p class="subtitle">Территорию после регистрации можно изменить через поддержку. Цена выше 200 000 сум — только с разрешения администратора.</p>
+          <div class="bt-client-master-apply-nav"><button type="button" class="secondary" onclick="btClientMasterShowStep(2)">← Назад</button><button type="submit">Проверить данные и отправить заявку</button></div>
+          <p id="masterApplicationStatus" class="subtitle" role="status"></p>
+        </section>
+      </form>`);
+    btClientMasterRenderSkills(BT_CLIENT_MASTER_DEFAULT_SKILLS);
+    btClientMasterRenderTerritories(btMapTerritories);
+    btClientMasterShowStep(1);
+    // Load current server catalog, retaining any already checked choices.
+    clientApi('/api/master/registration-catalog').then(catalog=>{
+        if(!document.getElementById('masterApplicationForm'))return;
+        if(catalog.skills)btClientMasterRenderSkills(catalog.skills);
+        if(catalog.regions)btClientMasterRenderTerritories(catalog.regions);
+    }).catch(()=>{/* Offline fallback remains, server checks all codes */});
+    // Existing client phone has already been verified.
+    clientApi('/api/client/profile').then(d=>{
+        const phone=d?.profile?.phone;
+        const field=document.getElementById('masterApplicationPhone');
+        if(phone&&field){field.value=phone;field.readOnly=true;}
+    }).catch(()=>{});
+    document.getElementById('masterApplicationForm')?.addEventListener('submit',e=>{
+        e.preventDefault();submitMasterApplication(e.currentTarget);
+    });
+    const birthInput=document.getElementById('masterApplicationBirthDate');
+    birthInput?.addEventListener('blur',()=>{
+        const normalized=normalizeMasterBirthDate(birthInput.value);
+        if(normalized)birthInput.value=normalized;
+    });
+    const uid=currentMasterApplicationOwner();
+    const queued=getMasterApplicationQueue().find(x=>String(x.telegram_user_id||'')===uid&&['pending','blocked'].includes(x.status));
+    if(queued){
+        const status=document.getElementById('masterApplicationStatus');
+        const button=document.querySelector('#masterApplicationForm button[type="submit"]');
+        if(queued.status==='pending'){
+            if(status){status.textContent='Ваша заявка ожидает отправки и будет отправлена автоматически при восстановлении связи.';status.className='notice';}
+            if(button){button.disabled=true;button.textContent='⏳ Заявка ожидает отправки';}
+            btClientMasterShowStep(3);
+        }else{
+            if(status){status.textContent=queued.last_error||'Уточните специализации, территорию и отправьте заявку снова.';status.className='error';}
+        }
     }
     startMasterApplicationAutoSync();
 }
-
 async function submitMasterApplication(form){
-    const data=Object.fromEntries(new FormData(form).entries());
-    data.name=String(data.name||'').trim(); data.phone=cleanPhone(data.phone); data.gender=String(data.gender||'').trim(); data.birth_date=normalizeMasterBirthDate(data.birth_date); data.pinfl=String(data.pinfl||'').replace(/\D/g,''); data.event='submit_master_application';
     const status=document.getElementById('masterApplicationStatus');
     const button=form.querySelector('button[type="submit"]');
-    if(data.name.length<2)return showAlert('Введите ФИО.');
-    if(!validPhone(data.phone))return showAlert('Введите корректный номер +998XXXXXXXXX.');
-    if(!['Мужской','Женский'].includes(data.gender))return showAlert('Выберите пол.');
-    if(!data.birth_date)return showAlert('Не удалось распознать дату. Используйте только ДДММГГГГ, ДД,ММ,ГГГГ, ДД.ММ.ГГГГ, ДД/ММ/ГГГГ или ДД\\ММ\\ГГГГ.');
-    const [birthDay,birthMonth,birthYear]=data.birth_date.split('.').map(Number);
-    if(!/^\d{14}$/.test(data.pinfl))return showAlert('ПИНФЛ должен содержать ровно 14 цифр.');
-    const first=Number(data.pinfl[0]); const map={3:['Мужской',1900],4:['Женский',1900],5:['Мужской',2000],6:['Женский',2000]}; const pin=map[first];
-    if(!pin)return showAlert('Первая цифра ПИНФЛ не соответствует допустимому формату.');
-    // PINFL: first digit = century/gender, then DDMMYY. Example: 3 20 04 95 = 20.04.1995.
-    const pinDate=`${data.pinfl.slice(1,3)}.${data.pinfl.slice(3,5)}.${pin[1]+Number(data.pinfl.slice(5,7))}`;
-    if(pin[0]!==data.gender||pinDate!==data.birth_date)return showAlert(`Проверьте данные: по ПИНФЛ указаны пол ${pin[0]} и дата рождения ${pinDate}.`);
-    try {
-      localStorage.setItem('remont_bt_phone',data.phone);
-      localStorage.setItem('remont_bt_name',data.name);
-      if(currentClientTelegramId)localStorage.setItem('remont_bt_profile_uid',currentClientTelegramId);
-    } catch(_) {}
-    // Persist first, then try the server. This prevents a 401/network error from losing the form.
-    if(!queueMasterApplication(data)) {
-      if(status){status.textContent='Не удалось сохранить заявку в очереди устройства. Освободите место в браузере и повторите.';status.className='error';}
-      if(button)button.disabled=false;
-      return;
+    let data;
+    try{
+        data=btClientMasterPersonalData();
+        data.specializations=btClientMasterCheckedSkills();
+        data.service_region=String(document.getElementById('masterApplicationRegion')?.value||'');
+        data.service_district=String(document.getElementById('masterApplicationDistrict')?.value||'');
+        const rawPrice=String(document.getElementById('masterApplicationPrice')?.value||'').trim();
+        data.diagnostic_price=Number(rawPrice);
+        data.event='submit_master_application';
+        if(!data.specializations.length){btClientMasterShowStep(2);throw Error('Выберите хотя бы одну специализацию.');}
+        if(!data.service_region||!data.service_district)throw Error('Выберите область и район обслуживания.');
+        if(!rawPrice||!Number.isSafeInteger(data.diagnostic_price)||data.diagnostic_price<0||data.diagnostic_price>200000)
+            throw Error('Стоимость диагностики должна быть от 0 до 200 000 сум.');
+    }catch(err){
+        if(status){status.textContent=err.message;status.className='error';}
+        showAlert(err.message||'Проверьте данные заявки.');return;
+    }
+    try{
+        localStorage.setItem('remont_bt_phone',data.phone);
+        localStorage.setItem('remont_bt_name',data.name);
+        if(currentClientTelegramId)localStorage.setItem('remont_bt_profile_uid',currentClientTelegramId);
+    }catch(_){}
+    // Keep the full 3-step payload in the retry queue, not just personal data.
+    if(!queueMasterApplication(data)){
+        if(status){status.textContent='Не удалось сохранить заявку в очереди. Освободите место и повторите.';status.className='error';}
+        if(button)button.disabled=false;
+        return;
     }
     if(button){button.disabled=true;button.textContent='⏳ Отправляем заявку…';}
     await syncMasterApplicationQueue();
 }
-
 async function clientApi(path, method='GET', body=null) {
     // Telegram may restore the Mini App after navigation; initialise the SDK before requests.
     try { if (window.Telegram?.WebApp) { window.Telegram.WebApp.ready(); window.Telegram.WebApp.expand(); } } catch (_) {}
