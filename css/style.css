@@ -1345,3 +1345,28 @@ body.bt-order-page .bt-map-open{margin-top:9px!important}
 #btAddressOverlay .bt-address-actions{display:flex!important;flex-wrap:wrap!important;gap:8px!important;flex-shrink:0!important;position:relative!important}
 #btAddressOverlay .bt-address-actions button{flex:1 1 135px!important;white-space:normal!important;min-width:0!important}
 #btAddressOverlay .bt-address-top{position:relative!important;min-height:38px!important}
+
+
+/* v11: improved client order pickers and compact marketplace master cards */
+.bt-marketplace-shade{position:fixed;inset:0;background:#000b;z-index:99999;display:grid;place-items:center;padding:12px}
+.bt-marketplace-panel{background:#13263a;color:#fff;border:1px solid #4487c4;border-radius:16px;padding:14px;max-width:480px;width:100%;max-height:88vh;overflow:hidden;display:flex;flex-direction:column;gap:10px;box-shadow:0 20px 40px #0008}
+.bt-marketplace-header h3{margin:0 0 4px;font-size:22px}.bt-marketplace-header p{margin:0;color:#a9c8e3;font-size:12px}
+.bt-marketplace-top-actions,.bt-marketplace-footer{display:grid;gap:8px}
+.bt-marketplace-wide-btn,.bt-marketplace-back-btn,.bt-marketplace-action-primary,.bt-marketplace-action-secondary{border:1px solid #4a8ed0;border-radius:12px;padding:10px 12px;background:linear-gradient(145deg,#2d78ff,#1659c9);color:#fff;font-weight:700;box-shadow:none!important}
+.bt-marketplace-back-btn,.bt-marketplace-action-secondary{background:linear-gradient(145deg,#1a3552,#12273d)}
+.bt-marketplace-list{display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:52vh;padding-right:2px}
+.bt-marketplace-card{border:1px solid #355d86;border-radius:12px;padding:10px;background:#19334b;display:flex;flex-direction:column;gap:8px}
+.bt-marketplace-card-top{display:flex;gap:10px;align-items:center}.bt-marketplace-avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none}
+.bt-marketplace-main{min-width:0;display:flex;flex-direction:column;gap:3px}.bt-marketplace-main strong{font-size:16px;line-height:1.1}.bt-marketplace-rating{font-size:12px;color:#d6ecff}
+.bt-marketplace-meta{display:grid;grid-template-columns:1fr;gap:2px;font-size:12px;color:#c0ddf3}.bt-marketplace-meta span{line-height:1.25}
+.bt-marketplace-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.bt-marketplace-actions button{min-height:42px;font-size:13px}
+.bt-marketplace-details{padding:2px 2px 0;font-size:12px;color:#d9edf8}.bt-marketplace-details p{margin:0 0 6px;line-height:1.35}
+.bt-marketplace-empty{border:1px dashed #4470a0;border-radius:12px;padding:14px;color:#c8dbed;background:#10253b;text-align:center}
+#service_directionStyledPicker .bt-master-choice-icon{font-size:16px}
+@media (max-width:480px){
+  .bt-marketplace-panel{padding:12px;max-height:90vh}
+  .bt-marketplace-list{max-height:55vh}
+  .bt-marketplace-actions{grid-template-columns:1fr}
+  .bt-marketplace-card{padding:9px}
+  .bt-marketplace-main strong{font-size:15px}
+}
