@@ -1319,7 +1319,7 @@ function btChooseClientPicker(selectId,button){
     for(const other of document.querySelectorAll(`#${selectId}StyledPicker .bt-client-picker-option`))other.classList.toggle('selected',other===button);
     native.dispatchEvent(new Event('change',{bubbles:true}));
 }
-function btEnhanceClientOrderPickers(){['device','brand','when_date','when_time'].forEach(btRenderStyledClientPicker);}
+function btEnhanceClientOrderPickers(){['brand','when_date','when_time'].forEach(btRenderStyledClientPicker);}
 
 // ============ ВЫБОР "ДРУГОЕ" ============
 
@@ -1387,7 +1387,11 @@ function btServiceDirectionChanged(){
     const option=new Option(label,code); option.dataset.displayName=label; select.add(option);
   }
   const custom=document.getElementById('device_custom_wrap');if(custom)custom.style.display='none';
-  btRenderStyledClientPicker('device');
+  // Native select is reliable in Telegram WebView and stays visible even if custom-picker CSS fails.
+  document.getElementById('deviceStyledPicker')?.remove();
+  select.classList.remove('bt-enhanced-native-select');
+  delete select.dataset.enhanced;
+  select.style.cssText='display:block!important;position:static!important;left:auto!important;opacity:1!important;pointer-events:auto!important;width:100%!important;min-height:46px!important;background:#10243e!important;color:#fff!important;border:1px solid #3678a8!important;border-radius:10px!important;padding:10px!important;';
   btClientUpdateSubmitGlow();
 }
 function btClientUpdateSubmitGlow(){
