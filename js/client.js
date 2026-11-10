@@ -1566,6 +1566,7 @@ async function submitOrder() {
     }
     if(!validPhone(client_phone))return showAlert('Не удалось получить подтверждённый номер. Закройте приложение и откройте снова из Telegram.');
 
+    if (!service_code) return showAlert('Выберите вид техники');
     if (!device) return showAlert('Выберите вид техники');
     if (!brand) return showAlert('Выберите бренд');
 
@@ -1628,7 +1629,17 @@ async function submitOrder() {
         }
     }
 
+    // Resolve a missing district explicitly; never skip matching and never silently fall back.
+    if (!orderData.serviceRegion || !orderData.serviceDistrict) {
+        const area = await btConfirmServiceArea();
+        if (!area) return;
+        orderData.serviceRegion=area.region;
+        orderData.serviceDistrict=area.district;
+        data.service_region=area.region;
+        data.service_district=area.district;
+    }
     // Marketplace master choice. Never infer district from GPS without verified reverse geocoding.
+
     const serviceRegion = String(orderData.serviceRegion || '').trim();
     const serviceDistrict = String(orderData.serviceDistrict || '').trim();
     if (service_code && serviceRegion && serviceDistrict) {
@@ -1911,6 +1922,40 @@ async function btSearchAddressMap(){
     }finally{if(button)button.disabled=false;}
 }
 
+async function btConfirmServiceArea(){
+    let areas=[];
+    try {
+        const result=await clientApi('/api/map/areas');
+        areas=Array.isArray(result.areas)?result.areas:[];
+    } catch(err) {
+        showAlert('Не удалось загрузить районы обслуживания: '+(err.message||'ошибка сети'));
+        return null;
+    }
+    if(!areas.length){showAlert('В системе пока нет мастеров с подтверждённым районом обслуживания. Обратитесь в поддержку.');return null;}
+    return new Promise(resolve=>{
+        const shade=document.createElement('div');
+        shade.style.cssText='position:fixed;inset:0;background:#000c;z-index:100010;display:grid;place-items:center;padding:16px';
+        const panel=document.createElement('div');
+        panel.style.cssText='background:#13263a;color:#fff;border:1px solid #4487c4;border-radius:14px;padding:18px;max-width:480px;width:100%';
+        const title=document.createElement('h3');title.textContent='Подтвердите район ремонта';panel.append(title);
+        const help=document.createElement('p');help.textContent='Автоматическое определение района недоступно или не совпало со справочником. Выберите район, в котором находится точка на карте.';panel.append(help);
+        const region=document.createElement('select'),district=document.createElement('select');
+        for(const el of [region,district]){el.style.cssText='display:block;width:100%;padding:12px;margin:10px 0;color:#13263a;background:white;border-radius:8px';panel.append(el);}
+        const fill=(select,items,placeholder)=>{select.replaceChildren();const blank=new Option(placeholder,'');select.add(blank);for(const value of items)select.add(new Option(value,value));};
+        fill(region,[...new Set(areas.map(x=>x.region))].sort(),'Выберите область');
+        const update=()=>fill(district,[...new Set(areas.filter(x=>x.region===region.value).map(x=>x.district))].sort(),'Выберите район');
+        region.onchange=update;update();
+        const actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px';
+        const finish=value=>{shade.remove();resolve(value)};
+        const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Назад';cancel.onclick=()=>finish(null);
+        const confirm=document.createElement('button');confirm.type='button';confirm.textContent='Подтвердить';confirm.onclick=()=>{
+            if(!region.value||!district.value){showAlert('Выберите область и район');return;}
+            finish({region:region.value,district:district.value});
+        };
+        actions.append(cancel,confirm);panel.append(actions);shade.append(panel);document.body.append(shade);
+    });
+}
+
 async function btConfirmAddressMap(){
     if(!btAddressMapInstance)return;
     const center=btAddressMapInstance.getCenter();
@@ -1929,6 +1974,15 @@ async function btConfirmAddressMap(){
     orderData.location={lat:Number(center.lat.toFixed(6)),lon:Number(center.lng.toFixed(6))};
     orderData.serviceRegion=verified?.verified ? String(verified.region||'') : '';
     orderData.serviceDistrict=verified?.verified ? String(verified.district||'') : '';
+    // Do not trust an arbitrary reverse-geocoder label as a matching key.
+    // The order flow will request a manual selection if no exact match exists.
+    try {
+        const areasResult=await clientApi('/api/map/areas');
+        const areas=Array.isArray(areasResult.areas)?areasResult.areas:[];
+        if(!areas.some(x=>x.region===orderData.serviceRegion && x.district===orderData.serviceDistrict)){
+            orderData.serviceRegion='';orderData.serviceDistrict='';
+        }
+    }catch(e){orderData.serviceRegion='';orderData.serviceDistrict='';}
     orderData.mapAddress=verified?.address || btAddressMapLabel || '';
     const status=document.getElementById('location_status');
     if(status){
