@@ -1295,11 +1295,14 @@ const btClientPickerIcons={
     brand:['LG','S','I','B','A','✎'],
 };
 function btRenderStyledClientPicker(selectId){
-    const native=document.getElementById(selectId);if(!native||native.dataset.enhanced)return;
+    const native=document.getElementById(selectId);if(!native)return;
+    const oldPicker=document.getElementById(selectId+'StyledPicker');
+    if(oldPicker){oldPicker.remove();delete native.dataset.enhanced;}
+    if(native.dataset.enhanced)return;
     const choices=[...native.options].filter(option=>option.value);
     const prefix=selectId==='device'?'device':selectId==='brand'?'brand':'';
     const options=choices.map((option,i)=>{
-        const icon=prefix?btClientPickerIcons[prefix][i]:selectId==='when_date'?'◷':'◉';
+        const icon=prefix?(btClientPickerIcons[prefix]?.[i]||'🔧'):selectId==='when_date'?'◷':'◉';
         return `<button type="button" class="bt-client-picker-option" role="option" data-picker-value="${escapeClient(option.value)}" onclick="btChooseClientPicker('${selectId}',this)"><span class="bt-master-choice-icon">${escapeClient(icon)}</span><span>${escapeClient(option.textContent.replace(/^\s*[📻🧺❄🌬✏️]+\s*/u,'').trim())}</span><span aria-hidden="true">✓</span></button>`;
     }).join('');
     const summary=choices.find(o=>o.value===native.value)?.textContent||'Выберите вариант';
