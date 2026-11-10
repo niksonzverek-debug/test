@@ -1370,3 +1370,17 @@ body.bt-order-page .bt-map-open{margin-top:9px!important}
   .bt-marketplace-card{padding:9px}
   .bt-marketplace-main strong{font-size:15px}
 }
+
+/* v12 map: map first, search beneath; no manual territory/address inputs. */
+#btAddressOverlay .bt-address-dialog.bt-map-simple{display:flex!important;gap:11px!important;padding:10px!important}
+#btAddressOverlay .bt-map-simple .bt-map-stage{order:0;height:clamp(270px,44dvh,430px)!important;min-height:250px!important;border-radius:15px}
+#btAddressOverlay .bt-map-simple .bt-address-search{order:1;display:block!important;width:100%;margin:0!important}
+#btAddressOverlay .bt-map-simple .bt-address-search input{width:100%!important;max-width:100%!important;box-sizing:border-box!important;min-height:47px!important}
+#btAddressOverlay .bt-map-simple .bt-map-search-actions{order:2;display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important;margin:0!important;flex-wrap:nowrap!important}
+#btAddressOverlay .bt-map-simple .bt-map-search-actions button{min-width:0!important;min-height:47px!important;flex:unset!important;padding:9px 6px!important;font-size:13px!important}
+#btAddressOverlay .bt-map-simple .bt-map-search-results{order:3}
+#btAddressOverlay .bt-map-simple #btMapHint{order:4;margin:1px 0!important;font-size:12px!important;line-height:1.45!important;color:#bcd5ed}
+#btAddressOverlay .bt-map-simple #btMapActionFeedback{order:5}
+#btAddressOverlay .bt-map-simple .bt-address-actions{order:6;margin:0!important;display:grid!important;grid-template-columns:1fr 1fr!important;gap:8px!important}
+#btAddressOverlay .bt-map-simple .bt-address-actions button{min-width:0!important;flex:unset!important;min-height:49px!important;padding:9px 5px!important;white-space:normal!important;line-height:1.25!important}
+@media(max-height:700px){#btAddressOverlay .bt-map-simple .bt-map-stage{height:clamp(220px,39dvh,330px)!important}}
