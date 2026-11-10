@@ -1071,7 +1071,25 @@ async function btRequestTerritoryChange(){
 function btMasterRenderServices(profile){
  const holder=document.getElementById('btMasterSkills');if(!holder)return;
  const selected=new Set(Array.isArray(profile.specializations)?profile.specializations:[]);
- holder.innerHTML=Object.entries(BT_MASTER_SKILLS).map(([group,items])=>`<fieldset style="border:1px solid #31557d;border-radius:12px;padding:10px"><legend>${masterEsc(group)}</legend>${Object.entries(items).map(([code,label])=>`<label style="display:flex;align-items:center;gap:9px;padding:5px 0"><input type="checkbox" name="btMasterSkill" value="${code}" ${selected.has(code)?'checked':''}><span>${masterEsc(label)}</span></label>`).join('')}</fieldset>`).join('');
+ holder.innerHTML=`<style id="bt-compact-specializations">
+ .bt-skill-group{border:1px solid #31557d;border-radius:12px;margin:8px 0;overflow:hidden;background:#0c1c31}
+ .bt-skill-group summary{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;padding:13px 12px;list-style:none;font-weight:700;user-select:none}
+ .bt-skill-group summary::-webkit-details-marker{display:none}
+ .bt-skill-group summary:after{content:'▾';color:#54bcff;font-size:16px;transition:transform .15s}
+ .bt-skill-group[open] summary:after{transform:rotate(180deg)}
+ .bt-skill-count{margin-left:auto;font-size:12px;opacity:.84;white-space:nowrap;font-weight:500}
+ .bt-skill-options{padding:4px 12px 12px;border-top:1px solid #264362;display:grid;gap:3px}
+ .bt-skill-option{display:flex;align-items:center;gap:10px;padding:9px 4px;cursor:pointer}
+ .bt-skill-option input{flex:none;width:18px;height:18px;accent-color:#29a8fa}
+ </style>`+Object.entries(BT_MASTER_SKILLS).map(([group,items])=>{
+   const chosen=Object.keys(items).filter(code=>selected.has(code)).length;
+   return `<details class="bt-skill-group"><summary><span>${masterEsc(group)}</span><span class="bt-skill-count" aria-live="polite">${chosen} из ${Object.keys(items).length}</span></summary><div class="bt-skill-options">${Object.entries(items).map(([code,label])=>`<label class="bt-skill-option"><input type="checkbox" name="btMasterSkill" value="${masterEsc(code)}" ${selected.has(code)?'checked':''}><span>${masterEsc(label)}</span></label>`).join('')}</div></details>`;
+ }).join('');
+ holder.querySelectorAll('.bt-skill-group').forEach(group=>group.addEventListener('change',()=>{
+   const count=group.querySelectorAll('input[name="btMasterSkill"]:checked').length;
+   const total=group.querySelectorAll('input[name="btMasterSkill"]').length;
+   const badge=group.querySelector('.bt-skill-count');if(badge)badge.textContent=`${count} из ${total}`;
+ }));
  const target=document.getElementById('btMasterActCategories');if(!target)return;
  const counts=new Map();const labels=Object.assign({},...Object.values(BT_MASTER_SKILLS));
  for(const act of masterCache.acts||[]){
