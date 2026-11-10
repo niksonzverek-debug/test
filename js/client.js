@@ -202,6 +202,7 @@ function renderClientMenu() {
         <main class="bt-client-home">
           <header class="bt-brand-head bt-compact-header bt-client-header"><img class="bt-brand-logo bt-header-logo" src="img/remont-bt-icon.png" alt="ТехСервис"><div class="bt-header-copy"><span class="bt-header-hello">Здравствуйте!</span><strong class="bt-header-name" id="clientWelcomeName">${escapeClient(tg.initDataUnsafe?.user?.first_name || localStorage.getItem('remont_bt_name') || 'клиент')}</strong></div><span class="bt-header-role">👤 <span>Клиент</span></span></header>
           <button class="bt-client-promo-banner" id="btClientPromoBanner" type="button" onclick="showEnterPromo()"><span data-promo-icon>🎁</span><span><b data-promo-title>У вас есть промокод?</b><small data-promo-detail>Получите скидку на ремонт</small></span><span aria-hidden="true">›</span></button>
+          <button class="menu-btn bt-cashback-home" id="btCashbackHome" type="button" onclick="showClientCashback()" style="display:flex;width:100%;align-items:center;justify-content:space-between;margin:8px 0 12px;text-align:left"><span>🎁 Кешбэк <small style="display:block">Доступно для будущих ремонтов</small></span><strong id="btCashbackBalance">Загрузка…</strong></button>
           <button class="bt-main-action bt-client-new-order-action bt-red-action" type="button" onclick="showNewOrder()">＋ Создать заявку</button>
           <div class="client-home-grid bt-home-tiles">
             <button class="menu-btn" onclick="showMyOrders()"><span class="emoji bt-line-icon">▤</span><b>Мои заявки</b><small>История</small></button>
@@ -225,6 +226,7 @@ function renderClientMenu() {
           </section>
           <div id="btAdvertiserSlot"></div><nav class="bt-client-bottom-nav" aria-label="Навигация"><button onclick="renderClientMenu()"><span>⌂</span>Главная</button><button onclick="showMyOrders()"><span>▤</span>Заявки</button><button onclick="btFocusHomeChat()"><span>✉</span>Чат</button><button onclick="showProfile()"><span>♙</span>Профиль</button></nav>
         </main>`;
+    btRefreshClientCashback();
     btRefreshClientReferralEntry();
     window.btMountClientLanguage?.();
     btRefreshClientReviewsEntry();
@@ -408,7 +410,8 @@ function queueMasterApplication(data) {
     items.push({
         operation_id: (typeof uuidV4 === 'function' ? uuidV4() : `${Date.now()}-${Math.random()}`),
         telegram_user_id: uid,
-        payload: {name:data.name, phone:data.phone, gender:data.gender, birth_date:data.birth_date, pinfl:data.pinfl},
+        payload: {name:data.name, phone:data.phone, gender:data.gender, birth_date:data.birth_date, pinfl:data.pinfl,
+                  specializations:data.specializations,service_region:data.service_region,service_district:data.service_district,diagnostic_price:data.diagnostic_price},
         queued_at: new Date().toISOString(),
         attempts: 0,
         status: 'pending'
@@ -424,7 +427,7 @@ function migrateLegacyMasterApplicationQueue() {
         if (item && item.event === 'submit_master_application' && ['pending','retry'].includes(item.local_status)) {
             const uid = String(item.telegram_user_id || '');
             const owner = currentMasterApplicationOwner();
-            if (uid && uid === owner && item.name && item.phone && item.pinfl) {
+            if (uid && uid === owner && item.name && item.phone && item.pinfl && Array.isArray(item.specializations) && item.specializations.length && item.service_region && item.service_district) {
                 const current = getMasterApplicationQueue();
                 if (!current.some(x => x.telegram_user_id === uid && x.payload?.pinfl === item.pinfl && x.payload?.phone === item.phone)) {
                     current.push({operation_id:item.operation_id || (typeof uuidV4==='function'?uuidV4():String(Date.now())), telegram_user_id:uid,
@@ -445,7 +448,7 @@ async function syncMasterApplicationQueue() {
     const uid = currentMasterApplicationOwner();
     if (!/^\d{1,20}$/.test(uid)) return;
     const items = getMasterApplicationQueue();
-    const item = items.find(x => String(x.telegram_user_id || '') === uid && x.status === 'pending');
+    const item = items.find(x => String(x.telegram_user_id || '') === uid && x.status === 'pending' && Array.isArray(x.payload?.specializations) && x.payload.specializations.length && x.payload?.service_region && x.payload?.service_district);
     if (!item) return;
     masterApplicationSyncInProgress = true;
     try {
@@ -509,12 +512,16 @@ function showMasterApplicationForm() {
     try { localStorage.removeItem('remont_bt_master_application'); } catch (_) {}
     setPage('🧑‍🔧 Заявка мастера', `<p class="subtitle">Укажите ФИО, телефон и данные для проверки ПИНФЛ. Пол и дата рождения сверяются с первыми цифрами ПИНФЛ. После проверки заявка уйдёт администратору; доступ выдаётся только после одобрения и привязывается к вашему Telegram ID.</p>
       <form id="masterApplicationForm" class="card master-auth-card">
+        <div id="btMasterStep1"><h3>Шаг 1 из 3 — Основные данные</h3>
         <label for="masterApplicationName">ФИО *</label><input id="masterApplicationName" name="name" required minlength="2" maxlength="150" autocomplete="name" value="${escapeClient(saved.name || localStorage.getItem('remont_bt_name') || '')}">
         <label for="masterApplicationPhone">Телефон *</label><input id="masterApplicationPhone" name="phone" required type="tel" inputmode="tel" autocomplete="tel" placeholder="+998 90 123 45 67" value="${escapeClient(saved.phone || localStorage.getItem('remont_bt_phone') || '')}">
         <label for="masterApplicationGender">Пол *</label><select id="masterApplicationGender" name="gender" required><option value="">Выберите пол</option><option value="Мужской" ${saved.gender==='Мужской'?'selected':''}>Мужской</option><option value="Женский" ${saved.gender==='Женский'?'selected':''}>Женский</option></select>
         <label for="masterApplicationBirthDate">Дата рождения *</label><input id="masterApplicationBirthDate" name="birth_date" required inputmode="numeric" autocomplete="bday" placeholder="ДДММГГГГ или ДД.ММ.ГГГГ" value="${escapeClient(saved.birth_date || '')}">
         <label for="masterApplicationPinfl">ПИНФЛ (14 цифр) *</label><input id="masterApplicationPinfl" name="pinfl" required inputmode="numeric" autocomplete="off" minlength="14" maxlength="14" pattern="[0-9]{14}" placeholder="14 цифр" value="${escapeClient(saved.pinfl || '')}">
-        <button type="submit">Проверить данные и отправить заявку</button><p id="masterApplicationStatus" class="subtitle" role="status"></p>
+        <button type="button" onclick="btMasterApplicationNext(1)">Далее — специализации</button></div>
+        <div id="btMasterStep2" hidden><h3>Шаг 2 из 3 — Специализации</h3><p class="subtitle">Можно выбрать несколько видов работ.</p><div id="btMasterApplySkills"></div><button type="button" class="secondary" onclick="btMasterApplicationStep(1)">← Назад</button><button type="button" onclick="btMasterApplicationNext(2)">Далее — территория</button></div>
+        <div id="btMasterStep3" hidden><h3>Шаг 3 из 3 — Территория и диагностика</h3><label for="btMasterApplyRegion">Область</label><select id="btMasterApplyRegion" onchange="btMasterApplyDistricts()" required></select><label for="btMasterApplyDistrict">Город / район обслуживания</label><select id="btMasterApplyDistrict" required></select><label for="btMasterApplyPrice">Выезд и диагностика, сум</label><input id="btMasterApplyPrice" type="number" min="0" max="200000" step="1000" value="0" required><p class="subtitle">Территория после регистрации меняется через поддержку. Стоимость выше 200 000 сум — по разрешению администратора.</p><button type="button" class="secondary" onclick="btMasterApplicationStep(2)">← Назад</button>
+        <button type="submit">Проверить данные и отправить заявку</button></div><p id="masterApplicationStatus" class="subtitle" role="status"></p>
       </form>`);
     // Phone is already verified in Telegram before either cabinet is opened.
     clientApi('/api/client/profile').then(d => {
@@ -542,11 +549,17 @@ function showMasterApplicationForm() {
         if (button) { button.textContent='Проверить данные и отправить заявку'; button.disabled=false; }
       }
     }
+    btMasterLoadApplicationCatalog();
     startMasterApplicationAutoSync();
 }
 
 async function submitMasterApplication(form){
     const data=Object.fromEntries(new FormData(form).entries());
+    data.specializations=Array.from(document.querySelectorAll('#btMasterApplySkills input:checked')).map(x=>x.value);
+    data.service_region=document.getElementById('btMasterApplyRegion')?.value||'';
+    data.service_district=document.getElementById('btMasterApplyDistrict')?.value||'';
+    data.diagnostic_price=Number(document.getElementById('btMasterApplyPrice')?.value);
+    if(!btMasterApplicationCatalog||!data.specializations.length||!data.service_region||!data.service_district||!Number.isInteger(data.diagnostic_price)||data.diagnostic_price<0||data.diagnostic_price>200000)return showAlert('Выберите специализации, район и стоимость диагностики от 0 до 200 000 сум.');
     data.name=String(data.name||'').trim(); data.phone=cleanPhone(data.phone); data.gender=String(data.gender||'').trim(); data.birth_date=normalizeMasterBirthDate(data.birth_date); data.pinfl=String(data.pinfl||'').replace(/\D/g,''); data.event='submit_master_application';
     const status=document.getElementById('masterApplicationStatus');
     const button=form.querySelector('button[type="submit"]');
@@ -674,9 +687,27 @@ function btOrderCards(rows) {
             <p>${escapeClient(o.problem||'')}</p>${btOrderTimeline(o)}
             <p class="subtitle">Обновлено: ${escapeClient(date||'—')}</p>
             ${o.promocode?`<p>🎟️ Промокод: ${escapeClient(o.promocode)}</p>`:''}
+            ${o.master_search_mode==='free' && displayStatus==='new' && !o.assigned_master_id?`<button type="button" onclick="btReroutePublicOrder('${escapeClient(o.id)}','free')">🔄 Повторить поиск мастера</button><button type="button" class="secondary" onclick="btChoosePublicOrderMaster('${escapeClient(o.id)}')">👤 Выбрать мастера</button>`:''}
+            ${['accepted','in_progress'].includes(String(o.status))&&!o.act_number?`<button type="button" class="secondary" onclick="btCancelAcceptedOrder('${escapeClient(o.id)}')">Отменить заявку</button>`:''}
             ${confirmationReady?`<button onclick="confirmClientAct('${escapeClient(o.id)}')">✅ Подтвердить выполнение</button>${deadline}`:''}
         </article>`;
     }).join('');
+}
+async function btReroutePublicOrder(orderId, mode='free', masterId=null){
+    try{
+        const result=await clientApi('/api/client/public-order/reroute','POST',{order_id:orderId,mode,master_id:masterId});
+        showAlert(result.message||'Заявка направлена мастерам.');
+        await showMyOrders();
+    }catch(e){showAlert(e.message||'Не удалось повторно направить заявку.');}
+}
+async function btChoosePublicOrderMaster(orderId){
+    try{
+        const result=await clientApi('/api/client/public-order/options?'+new URLSearchParams({order_id:orderId}));
+        btClientShowMasterRouting({...result,linked_master_id:null},choice=>{
+            if(choice.mode==='selected')btReroutePublicOrder(orderId,'selected',choice.master_id);
+            else if(choice.mode==='free')btReroutePublicOrder(orderId,'free');
+        });
+    }catch(e){showAlert(e.message||'Не удалось получить список мастеров.');}
 }
 async function btRefreshOrderCards() {
     if (document.hidden || !document.getElementById('btOrdersList')) return;
@@ -701,11 +732,23 @@ async function showMyOrders() {
     try {
         const d = await clientApi('/api/client/dashboard');
         const activeOrders = btActiveOrders(d.orders||[]);
-        setPage('📋 Мои заявки', `${activeOrders.length ? `<div class="card"><b>Мастер: ${escapeClient(d.master?.name||'Не назначен')}</b> ${btMasterVerifiedBadge(d.master)}</div><p class="subtitle">Статусы обновляются автоматически каждые 20 секунд.</p>` : ''}<div id="btOrdersList">${btOrderCards(activeOrders)}</div>`);
+        const cancelledPending=(d.orders||[]).filter(o=>o.status==='cancelled'&&o.cancel_review&&!o.cancel_review.client_answer);
+        const cancellationCards=cancelledPending.map(o=>`<article class="card"><b>Отмена ${escapeClient(o.id)}</b><p>Был ли фактически выполнен ремонт?</p><div class="button-row"><button type="button" onclick="btAnswerCancellation('${escapeClient(o.id)}','yes')">Да</button><button type="button" class="secondary" onclick="btAnswerCancellation('${escapeClient(o.id)}','no')">Нет</button><button type="button" class="secondary" onclick="btAnswerCancellation('${escapeClient(o.id)}','unsure')">Не уверен(а)</button></div></article>`).join('');
+        setPage('📋 Мои заявки', `${activeOrders.length ? `<div class="card"><b>Мастер: ${escapeClient(d.master?.name||'Не назначен')}</b> ${btMasterVerifiedBadge(d.master)}</div><p class="subtitle">Статусы обновляются автоматически каждые 20 секунд.</p>` : ''}<div id="btOrdersList">${btOrderCards(activeOrders)}</div>${cancellationCards}`);
         btOrderProgressTimer=setInterval(btRefreshOrderCards,20000);
     } catch (e) { setPage('📋 Мои заявки', `<div class="card error">${escapeClient(e.message)}</div>`); }
 }
 
+async function btCancelAcceptedOrder(orderId){
+    const reason=prompt('Причина отмены заявки (минимум 5 символов):');if(reason===null)return;
+    try{const r=await clientApi('/api/client/order/cancel','POST',{order_id:orderId,reason});showAlert(r.message);await showMyOrders();}
+    catch(e){showAlert(e.message||'Не удалось отменить заявку.');}
+}
+async function btAnswerCancellation(orderId,answer){
+    const comment=prompt('Комментарий для администратора (необязательно):','');if(comment===null)return;
+    try{const r=await clientApi('/api/client/order/cancel-answer','POST',{order_id:orderId,answer,comment});showAlert(r.message);await showMyOrders();}
+    catch(e){showAlert(e.message||'Не удалось отправить ответ.');}
+}
 async function confirmClientAct(orderId) {
     if (tg && typeof tg.showConfirm === 'function') {
         tg.showConfirm('Подтверждаете, что работы выполнены?', async yes => {
@@ -774,7 +817,8 @@ function showClientActPreview(number){
       <p><b>Выполненные работы:</b></p><ol>${works.map(w=>`<li>${escapeClient(typeof w==='string'?w:(w?.name||w?.title||'Работа'))}</li>`).join('')||'<li>Не указаны</li>'}</ol>
       <p><b>Стоимость ремонта:</b> ${escapeClient(btActMoney(act.price))}</p>
       ${Number(act.discount_amount||0)>0?`<p><b>Скидка:</b> −${escapeClient(btActMoney(act.discount_amount))}</p>`:''}
-      <p><b>Итого:</b> ${escapeClient(btActMoney(act.final_price??act.price))}</p>
+      <p><b>Итого ремонт:</b> ${escapeClient(btActMoney(act.final_price??act.price))}</p>
+      ${Number(act.cashback_used_tiyin||0)>0?`<p><b>Оплачено кешбэком:</b> −${escapeClient(btActMoney(Number(act.cashback_used_tiyin)/100))}</p><p><b>К оплате клиентом:</b> ${escapeClient(btActMoney(act.client_due_sum))}</p>`:''}
       <p><b>Гарантия:</b> ${escapeClient(act.guarantee_text||'—')} · до ${escapeClient(act.guarantee_until||'—')}</p>
       <p>${btWarrantyIndicator(act)}</p>
       ${act.paynet_url && !['paid','confirmed','confirmed_automatic','confirmed_auto','auto_confirmed'].includes(String(act.payment_status==='paid'?'paid':act.status||''))?`<a class="btn" href="${escapeClient(act.paynet_url)}" target="_blank" rel="noopener noreferrer">💳 Оплатить через Paynet</a><p class="subtitle">Оплата откроется в Paynet. После оплаты сообщите мастеру — автоматической проверки пока нет.</p>`:''}
@@ -1139,13 +1183,24 @@ function showNewOrder() {
 
         <div class="card">
             <label for="service_direction">Направление услуги</label>
-            <select id="service_direction" class="bt-client-select" onchange="btServiceDirectionChanged()">
-                <option value="appliance">Ремонт бытовой техники</option>
-                <option value="computer">Ремонт ПК и периферии</option>
-                <option value="installation">Монтаж / демонтаж</option>
+            <select id="service_direction" class="bt-client-select" onchange="btClientDirectionChanged()">
+                <option value="">— Выберите направление —</option>
+                <option value="appliance">🔧 Ремонт бытовой техники</option>
+                <option value="computer">💻 Ремонт ПК и периферии</option>
+                <option value="installation">🛠️ Монтаж / демонтаж</option>
             </select>
             <label for="device">Вид техники / услуга</label>
-            <select id="device" class="bt-client-select" onchange="onDeviceChange()"></select>
+            <select id="device" class="bt-client-select" onchange="onDeviceChange()">
+                <option value="">— Сначала выберите направление —</option>
+            </select>
+            <div id="btOperationWrap" style="display:none">
+                <label for="bt_operation">Операция</label>
+                <select id="bt_operation" class="bt-client-select" onchange="btClientOperationChanged()">
+                    <option value="">— Выберите операцию —</option>
+                    <option value="Монтаж">Монтаж</option>
+                    <option value="Демонтаж">Демонтаж</option>
+                </select>
+            </div>
 
             <div id="device_custom_wrap" style="display:none;margin-top:10px;">
                 <label>Укажите вид техники</label>
@@ -1155,7 +1210,6 @@ function showNewOrder() {
             <label>Бренд</label>
             <select id="brand" class="bt-client-select" onchange="onBrandChange()">
                 <option value="">— Выберите —</option>
-                <option value="Не применимо">Не применимо</option>
                 <option value="LG">LG</option>
                 <option value="Samsung">Samsung</option>
                 <option value="Indesit">Indesit</option>
@@ -1192,14 +1246,18 @@ function showNewOrder() {
         <div class="card">
             <label for="house">Адрес ремонта</label>
             <div class="bt-client-address-row"><div><label for="house">Дом</label><input id="house" maxlength="40" placeholder="15" autocomplete="off" oninput="btClientManualAddressChanged()"></div><div><label for="apartment">Кв.</label><input id="apartment" maxlength="80" placeholder="42" autocomplete="off"></div></div>
-            <p class="subtitle">Укажите дом и квартиру. На карте найдите адрес или нажмите «Моя локация».</p>
-            <button type="button" onclick="btOpenAddressMap()" class="bt-map-open">🗺️ Открыть карту</button>
+            <p class="subtitle">Укажите дом и квартиру. Адрес выберите на карте. Текущую локацию можно определить внутри карты.</p>
+            <button type="button" onclick="btOpenAddressMap()" class="bt-map-open">🗺️ Выбрать на карте</button>
 
             <p id="location_status" style="color:#888;font-size:13px;margin-top:8px;">
-                Точка ремонта не выбрана. Откройте карту.
+                Точка на карте не выбрана.
             </p>
         </div>
 
+        <div class="card" id="btOrderCashbackCard">
+            <label style="display:flex;align-items:center;gap:10px"><input type="checkbox" id="btUseCashback" style="width:auto;flex:none"> Списать накопленный кешбэк в счёт оплаты ремонта</label>
+            <p class="subtitle" id="btOrderCashbackHint">Сумма будет рассчитана при выдаче акта. Остаток оплачивается мастеру.</p>
+        </div>
         <div class="card promo-card" id="orderPromoCard">
             <label>🎟️ Промокод</label>
             <input id="order_promo_code" placeholder="Например, REMONT10" maxlength="64" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase">
@@ -1211,10 +1269,15 @@ function showNewOrder() {
     ` + btClientBottomNav();
     orderData.location=null;
     orderData.mapAddress='';
-    orderData.serviceRegion='';
-    orderData.serviceDistrict='';
+    orderData.service_region='';orderData.service_district='';
+    clientApi('/api/client/cashback').then(d=>{
+        const available=Math.floor(Number(d.available_tiyin||0)/100);
+        const hint=document.getElementById('btOrderCashbackHint');
+        const checkbox=document.getElementById('btUseCashback');
+        if(hint)hint.textContent='Доступно: '+available.toLocaleString('ru-RU')+' сум. Сумма списания определяется при выдаче акта.';
+        if(checkbox)checkbox.disabled=available<=0;
+    }).catch(()=>{const checkbox=document.getElementById('btUseCashback');if(checkbox)checkbox.disabled=true;});
     btEnhanceClientOrderPickers();
-    btServiceDirectionChanged();
     btClientBindOrderValidation();
 
     try {
@@ -1292,37 +1355,65 @@ async function submitRegistration() {
     }
 }
 
+// Единый каталог формы клиента. Отображаемые названия совместимы с прежними заявками.
+const btClientServiceCatalog={
+ appliance:[['Стиральная машина','🧺 Стиральная машина'],['Холодильник','❄️ Холодильник'],['Кондиционер','🌬️ Кондиционер'],['Микроволновая печь','▣ Микроволновая печь'],['Посудомоечная машина','Посудомоечная машина'],['Пылесос','Пылесос'],['Льдогенератор','Льдогенератор'],['Водонагреватель','Водонагреватель'],['ТВ / аудио / тюнеры','ТВ / аудио / тюнеры'],['__other__','✏️ Прочее (ввести вручную)']],
+ computer:[['Установка Windows','Установка Windows'],['Настольный ПК','Настольный ПК'],['Моноблок','Моноблок'],['Ноутбук','Ноутбук'],['Принтер','Принтер'],['Сканер','Сканер']],
+ installation:[['Кондиционер','Кондиционер'],['Стиральная машина','Стиральная машина'],['Газовая плита','Газовая плита'],['Электрическая плита','Электрическая плита'],['Водонагреватель','Водонагреватель'],['Газовый котёл','Газовый котёл']]
+};
+const btClientBrandCatalog={
+ appliance:['LG','Samsung','Indesit','Bosch','Атлант','Beko','Ariston','Electrolux','Haier','Whirlpool','Midea','Artel','Shivaki','Daewoo','Panasonic','Gorenje'],
+ computer:['Acer','Apple','ASUS','Brother','Canon','Dell','Epson','HP','Huawei','Lenovo','MSI','Samsung','Xerox'],
+ installation:['LG','Samsung','Bosch','Beko','Ariston','Electrolux','Haier','Midea','Artel','Shivaki','Daewoo','Gorenje']
+};
+function btClientReplaceOptions(id,items,placeholder){
+ const select=document.getElementById(id);if(!select)return;
+ select.replaceChildren(new Option(placeholder,''));
+ for(const [value,label] of items)select.add(new Option(label,value));
+ select.value='';
+ btRenderStyledClientPicker(id,true);
+}
+function btClientDirectionChanged(){
+ const direction=document.getElementById('service_direction')?.value||'';
+ btClientReplaceOptions('device',btClientServiceCatalog[direction]||[],direction?'— Выберите вид техники —':'— Сначала выберите направление —');
+ btClientReplaceOptions('brand',(btClientBrandCatalog[direction]||[]).map(x=>[x,x]).concat(direction?[['__other__','✏️ Другое (ввести вручную)']]:[]),'— Выберите бренд —');
+ const operationWrap=document.getElementById('btOperationWrap');
+ if(operationWrap)operationWrap.style.display=direction==='installation'?'block':'none';
+ const operation=document.getElementById('bt_operation');if(operation)operation.value='';
+ btRenderStyledClientPicker('bt_operation',true);
+ onDeviceChange();onBrandChange();btClientUpdateSubmitGlow();
+}
+function btClientOperationChanged(){btClientUpdateSubmitGlow();}
 const btClientPickerIcons={
     device:['♻','❄','◈','▣','◉','✎'],
     brand:['LG','S','I','B','A','✎'],
 };
-function btRenderStyledClientPicker(selectId){
-    const native=document.getElementById(selectId);if(!native)return;
-    document.getElementById(selectId+'StyledPicker')?.remove();
-    native.classList.remove('bt-enhanced-native-select');delete native.dataset.enhanced;
-    const choices=[...native.options].filter(option=>option.value && !option.disabled);
-    if(!choices.length){native.style.display='';return;}
-    const prefix=selectId==='device'?'device':selectId==='brand'?'brand':'';
-    const options=choices.map((option,i)=>{
-        const icon=prefix?(btClientPickerIcons[prefix]?.[i]||'🔧'):selectId==='when_date'?'◷':'◉';
-        return `<button type="button" class="bt-client-picker-option${option.value===native.value?' selected':''}" role="option" aria-selected="${option.value===native.value}" data-picker-value="${escapeClient(option.value)}" onclick="btChooseClientPicker('${selectId}',this)"><span class="bt-master-choice-icon">${escapeClient(icon)}</span><span>${escapeClient(option.textContent.trim())}</span><span aria-hidden="true">✓</span></button>`;
-    }).join('');
-    const summary=choices.find(o=>o.value===native.value)?.textContent||'Выберите вариант';
-    const details=document.createElement('details');details.className='bt-client-picker';details.id=selectId+'StyledPicker';
-    details.innerHTML=`<summary><span id="${selectId}StyledSummary">${escapeClient(summary)}</span><span aria-hidden="true">⌄</span></summary><div class="bt-client-picker-options" role="listbox">${options}</div>`;
-    native.before(details);native.classList.add('bt-enhanced-native-select');native.dataset.enhanced='1';
+function btRenderStyledClientPicker(selectId,force=false){
+ const native=document.getElementById(selectId);if(!native)return;
+ const existing=document.getElementById(selectId+'StyledPicker');
+ if(existing && !force)return;
+ if(existing)existing.remove();
+ const choices=[...native.options].filter(option=>option.value);
+ const prefix=selectId==='device'?'device':selectId==='brand'?'brand':'';
+ const options=choices.map((option,i)=>{
+  const icon=prefix?(btClientPickerIcons[prefix][i]||'◈'):selectId==='when_date'?'◷':'◉';
+  return `<button type="button" class="bt-client-picker-option" role="option" data-picker-value="${escapeClient(option.value)}" onclick="btChooseClientPicker('${selectId}',this)"><span class="bt-master-choice-icon">${escapeClient(icon)}</span><span>${escapeClient(option.textContent.trim())}</span><span aria-hidden="true">✓</span></button>`;
+ }).join('');
+ const summary=native.selectedOptions[0]?.value?native.selectedOptions[0].textContent:'Выберите вариант';
+ const details=document.createElement('details');details.className='bt-client-picker';details.id=selectId+'StyledPicker';
+ details.innerHTML=`<summary><span id="${selectId}StyledSummary">${escapeClient(summary)}</span><span aria-hidden="true">⌄</span></summary><div class="bt-client-picker-options" role="listbox">${options}</div>`;
+ native.before(details);native.classList.add('bt-enhanced-native-select');native.dataset.enhanced='1';
 }
 function btChooseClientPicker(selectId,button){
     const native=document.getElementById(selectId);if(!native)return;
     native.value=button.dataset.pickerValue;
-    if(native.value!==button.dataset.pickerValue)return;
     btClientUpdateSubmitGlow();
     document.getElementById(selectId+'StyledPicker').open=false;
     document.getElementById(selectId+'StyledSummary').textContent=button.querySelector('span:nth-child(2)')?.textContent||native.value;
-    for(const other of document.querySelectorAll(`#${selectId}StyledPicker .bt-client-picker-option`)){other.classList.toggle('selected',other===button);other.setAttribute('aria-selected',String(other===button));}
+    for(const other of document.querySelectorAll(`#${selectId}StyledPicker .bt-client-picker-option`))other.classList.toggle('selected',other===button);
     native.dispatchEvent(new Event('change',{bubbles:true}));
 }
-function btEnhanceClientOrderPickers(){['brand','when_date','when_time'].forEach(btRenderStyledClientPicker);}
+function btEnhanceClientOrderPickers(){['service_direction','device','bt_operation','brand','when_date','when_time'].forEach(id=>btRenderStyledClientPicker(id));}
 
 // ============ ВЫБОР "ДРУГОЕ" ============
 
@@ -1345,7 +1436,7 @@ function onBrandChange() {
 function btClientManualAddressChanged(){
     btClientUpdateSubmitGlow();
     const status=document.getElementById('location_status');
-    if(status && !orderData.location)status.textContent='Выберите точку ремонта на карте.';
+    if(status && !orderData.location)status.textContent='Укажите адрес на карте или отправьте геолокацию.';
 }
 function btClientLocationSelected(lat,lon){
     orderData.location={lat:Number(lat),lon:Number(lon)};
@@ -1359,47 +1450,6 @@ function btClientLocationSelected(lat,lon){
 }
 
 // Button glow reflects all required order fields; visual feedback only.
-// Patch 04: same stable service codes as service_catalog.py (patch 02).
-const BT_SERVICE_OPTIONS = {
-  appliance: [
-    ['washer','Стиральная машина'],['fridge','Холодильник'],
-    ['air_conditioner','Кондиционер'],['microwave','Микроволновая печь'],
-    ['dishwasher','Посудомоечная машина'],['vacuum','Пылесос'],
-    ['ice_maker','Льдогенератор'],['water_heater','Водонагреватель'],
-    ['tv_audio','ТВ / аудио / тюнер'],['other_appliance','Другая бытовая техника']
-  ],
-  computer: [
-    ['windows_install','Установка Windows'],['desktop','Настольный ПК'],
-    ['all_in_one','Моноблок'],['laptop','Ноутбук'],
-    ['printer','Принтер'],['scanner','Сканер']
-  ],
-  installation: [
-    ['install_air_conditioner','Монтаж кондиционера'],['remove_air_conditioner','Демонтаж кондиционера'],
-    ['install_washer','Монтаж стиральной машины'],['remove_washer','Демонтаж стиральной машины'],
-    ['install_gas_stove','Монтаж газовой плиты'],['remove_gas_stove','Демонтаж газовой плиты'],
-    ['install_electric_stove','Монтаж электрической плиты'],['remove_electric_stove','Демонтаж электрической плиты'],
-    ['install_water_heater','Монтаж водонагревателя'],['remove_water_heater','Демонтаж водонагревателя'],
-    ['install_gas_boiler','Монтаж газового котла'],['remove_gas_boiler','Демонтаж газового котла']
-  ]
-};
-function btServiceDirectionChanged(){
-  const direction=document.getElementById('service_direction')?.value||'appliance';
-  const select=document.getElementById('device'); if(!select)return;
-  select.replaceChildren(new Option('— Выберите —',''));
-  for(const [code,label] of (BT_SERVICE_OPTIONS[direction]||[])){
-    const option=new Option(label,code); option.dataset.displayName=label; select.add(option);
-  }
-  const custom=document.getElementById('device_custom_wrap');if(custom)custom.style.display='none';
-  // Rebuild the original visual dropdown after updating native options.
-  document.getElementById('deviceStyledPicker')?.remove();
-  select.classList.remove('bt-enhanced-native-select');
-  delete select.dataset.enhanced;
-  select.removeAttribute('style');
-  btRenderStyledClientPicker('device');
-  const picker=document.getElementById('deviceStyledPicker');
-  if(!picker)select.style.display='';
-  btClientUpdateSubmitGlow();
-}
 function btClientUpdateSubmitGlow(){
     const btn=document.getElementById('submit');if(!btn)return;
     const value=id=>String(document.getElementById(id)?.value||'').trim();
@@ -1409,9 +1459,10 @@ function btClientUpdateSubmitGlow(){
     const nameOk=!identity||identity.style.display==='none'||value('client_name').length>=2;
     const loc=orderData.location;
     const gpsOk=loc&&Number.isFinite(Number(loc.lat))&&Number.isFinite(Number(loc.lon));
-    const ready=Boolean(nameOk&&device&&brand&&value('problem').length>=5&&value('when_date')&&value('when_time')&&gpsOk);
+    const direction=value('service_direction');const operationOk=direction!=='installation'||Boolean(value('bt_operation'));
+    const ready=Boolean(nameOk&&direction&&operationOk&&device&&brand&&value('problem').length>=5&&value('when_date')&&value('when_time')&&gpsOk);
     btn.classList.toggle('bt-field-ready',ready);btn.classList.toggle('bt-field-empty',!ready);
-    for(const id of ['device','brand','when_date','when_time']){
+    for(const id of ['service_direction','device','bt_operation','brand','when_date','when_time']){
         const el=document.getElementById(id);if(!el)continue;
         const chosen=value(id);
         const ok=Boolean(chosen && (chosen!=='__other__' || value(id+'_custom')));
@@ -1528,12 +1579,70 @@ function confirmPromoContinue(message) {
     });
 }
 
+// Stage 4. Route choice is separate from permanent client-to-master attachment.
+function btClientShowMasterRouting(options, submitChoice){
+    document.getElementById('btClientRoutingModal')?.remove();
+    const overlay=document.createElement('div');
+    overlay.id='btClientRoutingModal';
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    const card=document.createElement('div');
+    card.className='card';
+    card.style.cssText='width:100%;max-width:420px;max-height:85vh;overflow:auto;';
+    const heading=document.createElement('h2');heading.textContent='Кому направить заявку?';card.append(heading);
+    function action(label,mode,master_id){
+        const btn=document.createElement('button');btn.type='button';btn.className='menu-btn';
+        btn.style.cssText='width:100%;margin:8px 0;';btn.textContent=label;
+        btn.addEventListener('click',()=>{overlay.remove();submitChoice({mode,master_id});});card.append(btn);
+    }
+    if(options.linked_master_id){
+        const linked=(options.masters||[]).find(m=>String(m.id)===String(options.linked_master_id));
+        action('Вызвать моего мастера'+(linked?' — '+linked.name:''),'linked',options.linked_master_id);
+    }
+    const choose=document.createElement('button');choose.type='button';choose.className='menu-btn';
+    choose.textContent='Выбрать мастера';choose.style.cssText='width:100%;margin:8px 0;';card.append(choose);
+    const listing=document.createElement('div');listing.hidden=true;card.append(listing);
+    choose.addEventListener('click',()=>{
+        listing.hidden=!listing.hidden;
+        if(listing.childNodes.length)return;
+        if(!(options.masters||[]).length){listing.textContent='Мастеров по этой услуге пока нет.';return;}
+        for(const m of options.masters){
+            const item=document.createElement('div');item.className='card';
+            item.style.cssText='margin:10px 0;padding:12px;';
+            const header=document.createElement('div');header.style.cssText='display:flex;gap:10px;align-items:center;';
+            if(m.avatar && (/^data:image\/(png|jpeg|webp);base64,/i.test(m.avatar)||/^https:\/\//i.test(m.avatar))){
+                const avatar=document.createElement('img');avatar.src=m.avatar;avatar.alt='Фото мастера';
+                avatar.style.cssText='width:52px;height:52px;border-radius:50%;object-fit:cover;';header.append(avatar);
+            }
+            const title=document.createElement('strong');title.textContent=m.name;header.append(title);item.append(header);
+            const details=document.createElement('div');details.style.cssText='font-size:13px;line-height:1.6;margin:8px 0;';
+            const price=Number(m.diagnostic_price||0);
+            details.textContent='Рейтинг: '+(Number(m.rating||0).toFixed(1))+' ★ · отзывов: '+(m.review_count||0)+' · район: '+(m.service_district||'не указан')+' · выезд и диагностика: '+(Number.isFinite(price)?price.toLocaleString('ru-RU'):'0')+' сум · актов по виду техники: '+(m.category_acts||0);
+            item.append(details);
+            const select=document.createElement('button');select.type='button';select.className='menu-btn';select.textContent='Выбрать';
+            select.style.cssText='width:100%;margin:5px 0;';
+            select.addEventListener('click',()=>{overlay.remove();submitChoice({mode:'selected',master_id:m.id});});item.append(select);
+            const info=document.createElement('button');info.type='button';info.className='secondary';info.textContent='Отзывы и информация';
+            info.style.cssText='width:100%;margin:5px 0;';item.append(info);
+            const expanded=document.createElement('div');expanded.hidden=true;expanded.style.cssText='margin-top:8px;font-size:13px;';
+            const about=document.createElement('p');about.textContent=m.about||'Дополнительная информация не указана.';expanded.append(about);
+            const reviews=m.reviews||[];
+            if(!reviews.length){const none=document.createElement('p');none.textContent='Пока нет действующих отзывов.';expanded.append(none);}
+            for(const r of reviews){const review=document.createElement('div');review.style.cssText='padding:8px 0;border-top:1px solid rgba(128,128,128,.3);';
+                const heading=document.createElement('strong');heading.textContent='★ '+r.rating+'/5'+(r.device?' · '+r.device:'');review.append(heading);
+                const body=document.createElement('div');body.textContent=r.text||'Без комментария';review.append(body);expanded.append(review);}
+            info.addEventListener('click',()=>{expanded.hidden=!expanded.hidden;});item.append(expanded);listing.append(item);
+        }
+    });
+    action('Найти свободного мастера','free',null);
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='secondary';cancel.textContent='← Вернуться к заявке';
+    cancel.style.cssText='width:100%;margin-top:10px;';cancel.addEventListener('click',()=>overlay.remove());card.append(cancel);
+    overlay.append(card);document.body.append(overlay);
+}
+
 // ============ ОТПРАВКА ЗАЯВКИ ============
 
-async function submitOrder() {
-    const service_direction = document.getElementById('service_direction')?.value || 'appliance';
-    const service_code = document.getElementById('device').value;
-    let device = (BT_SERVICE_OPTIONS[service_direction] || []).find(row => row[0] === service_code)?.[1] || '';
+async function submitOrder(confirmedChoice=null) {
+    let device = document.getElementById('device').value;
     let brand = document.getElementById('brand').value;
 
     if (device === '__other__') {
@@ -1566,7 +1675,11 @@ async function submitOrder() {
     }
     if(!validPhone(client_phone))return showAlert('Не удалось получить подтверждённый номер. Закройте приложение и откройте снова из Telegram.');
 
-    if (!service_code) return showAlert('Выберите вид техники');
+    const service_direction=document.getElementById('service_direction')?.value||'';
+    if(!service_direction)return showAlert('Выберите направление услуги');
+    const operation=document.getElementById('bt_operation')?.value||'';
+    if(service_direction==='installation'&&!operation)return showAlert('Выберите монтаж или демонтаж');
+    if(service_direction==='installation'&&device)device=operation+' — '+device;
     if (!device) return showAlert('Выберите вид техники');
     if (!brand) return showAlert('Выберите бренд');
 
@@ -1576,7 +1689,8 @@ async function submitOrder() {
 
     if (!when_date) return showAlert('Выберите дату');
     if (!when_time) return showAlert('Выберите время');
-    if (!orderData.location || !Number.isFinite(Number(orderData.location.lat)) || !Number.isFinite(Number(orderData.location.lon))) return showAlert('Выберите точку ремонта на карте');
+    if (!orderData.location) return showAlert('Выберите точку на карте');
+    if (!orderData.service_region || !orderData.service_district) return showAlert('Подтвердите область и район на карте');
 
     try {
         localStorage.setItem('remont_bt_house', house);
@@ -1601,7 +1715,7 @@ async function submitOrder() {
         ),
         device: device,
         service_direction: service_direction,
-        service_code: service_code,
+        service_operation: operation,
         brand: brand,
         model: model || '—',
         problem: problem,
@@ -1611,9 +1725,13 @@ async function submitOrder() {
         apartment: apartment,
         comment: comment,
         promo_code: order_promo_code,
+        use_cashback: Boolean(document.getElementById('btUseCashback')?.checked),
         location: orderData.location || null,
-        service_region: String(orderData.serviceRegion||''),
-        service_district: String(orderData.serviceDistrict||''),
+        service_region: orderData.service_region || '',
+        service_district: orderData.service_district || '',
+        address_region: orderData.service_region || '',
+        address_district: orderData.service_district || '',
+        map_address: orderData.mapAddress || '', 
     };
 
     // Даже если клиент не нажал «Проверить», сервер проверит и привяжет активный код
@@ -1629,38 +1747,17 @@ async function submitOrder() {
         }
     }
 
-    // Resolve a missing district explicitly; never skip matching and never silently fall back.
-    if (!orderData.serviceRegion || !orderData.serviceDistrict) {
-        const area = await btConfirmServiceArea();
-        if (!area) return;
-        orderData.serviceRegion=area.region;
-        orderData.serviceDistrict=area.district;
-        data.service_region=area.region;
-        data.service_district=area.district;
-    }
-    // Marketplace master choice. Never infer district from GPS without verified reverse geocoding.
-
-    const serviceRegion = String(orderData.serviceRegion || '').trim();
-    const serviceDistrict = String(orderData.serviceDistrict || '').trim();
-    if (service_code && serviceRegion && serviceDistrict) {
+    data.service_device=document.getElementById('device')?.value==='__other__' ? device : document.getElementById('device')?.value;
+    if (!confirmedChoice) {
         try {
-            const matching=await clientApi('/api/client/marketplace-masters?service_code='+encodeURIComponent(service_code)
-                +'&region='+encodeURIComponent(serviceRegion)+'&district='+encodeURIComponent(serviceDistrict));
-            const masters=matching.masters||[];
-            const selected=await btChooseMarketplaceMaster(masters);
-            if(selected===null)return;
-            if(selected==='public'){
-                data.marketplace_broadcast=true;
-                data.service_region=serviceRegion;
-                data.service_district=serviceDistrict;
-            }else{
-                data.selected_master_id=selected;
-                data.service_region=serviceRegion;
-                data.service_district=serviceDistrict;
-            }
-        }catch(e){return showAlert(e.message||'Не удалось получить список мастеров.');}
+            const query=new URLSearchParams({direction:service_direction,device:data.service_device,operation,region:data.service_region||'',district:data.service_district||''});
+            const options=await clientApi('/api/client/master-options?'+query.toString());
+            btClientShowMasterRouting(options, (choice)=>submitOrder(choice));
+        } catch(e) { showAlert(e.message||'Не удалось получить список мастеров.'); }
+        return;
     }
-
+    data.master_search_mode=confirmedChoice.mode;
+    data.selected_master_id=confirmedChoice.master_id||null;
     // Do not log client personal data in browser console.
 
     const btn = document.getElementById('submit');
@@ -1830,10 +1927,16 @@ async function btOpenAddressMap(){
     overlay.innerHTML=`<div class="bt-address-dialog" role="dialog" aria-modal="true" aria-label="Выбор адреса">
       <div class="bt-address-top"><strong>🗺️ Адрес ремонта</strong><button type="button" onclick="btCloseAddressMap()" aria-label="Закрыть">✕</button></div>
       <div class="bt-address-search"><input id="btMapSearch" placeholder="Улица, дом, махалля или ориентир" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();btSearchAddressMap();}"></div>
-      <div class="bt-map-search-actions" style="display:flex;gap:8px;margin:8px 0;flex-wrap:wrap"><button type="button" id="btMapSearchButton" onclick="btSearchAddressMap()">🔎 Найти адрес</button><button type="button" id="btMapMyLocation" onclick="btMapUseMyLocation()">📍 Моя локация</button></div>
+      <button type="button" id="btMapSearchButton" onclick="btSearchAddressMap()">🔎 Найти адрес</button>
       <div id="btMapSearchResults" class="bt-map-search-results" aria-live="polite"></div>
       <div class="bt-map-stage"><div id="btAddressMap"></div><button type="button" id="btMapLayerToggle" onclick="btMapSetLayer(btMapStyle==='street'?'satellite':'street')" aria-label="Включить спутник">🛰️ Спутник</button><div class="bt-map-center-pin" aria-hidden="true"><span>📍</span></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button type="button" onclick="btMapUseMyLocation()">📍 Моя локация</button><button type="button" onclick="btMapResolveAddress()">🔎 Определить адрес</button></div>
       <p id="btMapHint">Передвигайте карту, чтобы поставить метку на нужный дом.</p>
+      <div class="bt-map-area-editor" style="display:grid;gap:8px;margin:10px 0">
+        <label>Область<select id="btMapRegion" onchange="btMapRegionChanged()"><option value="">Выберите область</option></select></label>
+        <label>Город / район<select id="btMapDistrict"><option value="">Выберите город или район</option></select></label>
+        <label>Распознанный адрес<input id="btMapAddressText" placeholder="Улица, дом, ориентир" maxlength="400"></label>
+      </div>
       <div class="bt-address-actions"><button type="button" onclick="btCloseAddressMap()">Отмена</button><button type="button" id="btMapConfirm" onclick="btConfirmAddressMap()" disabled>✓ Подтвердить выбранную точку</button></div>
     </div>`;
     document.body.appendChild(overlay);
@@ -1853,39 +1956,19 @@ async function btOpenAddressMap(){
         };
         btMapStyle='street';btMapLayers.street.addTo(btAddressMapInstance);
         btMapSetLayer('street');
-        btAddressMapLabel='';
-        btAddressMapInstance.on('moveend',()=>{btAddressMapLabel='';btMapUpdateCenter();});
+        btAddressMapLabel=orderData.mapAddress||'';
+        await btMapLoadRegions();
+        if(orderData.service_region){const r=document.getElementById('btMapRegion');r.value=orderData.service_region;btMapRegionChanged();document.getElementById('btMapDistrict').value=orderData.service_district||'';}
+        document.getElementById('btMapAddressText').value=orderData.mapAddress||'';
+        btAddressMapInstance.on('moveend',()=>{btAddressMapLabel='';btMapUpdateCenter();btMapScheduleReverse();});
         btMapUpdateCenter();
+        if(!orderData.location)btMapScheduleReverse();
         setTimeout(()=>btAddressMapInstance?.invalidateSize(),100);
     }catch(e){
         const hint=document.getElementById('btMapHint');
-        if(hint)hint.textContent='Карта недоступна. Проверьте подключение к интернету.';
+        if(hint)hint.textContent='Карта недоступна. Проверьте интернет.';
         console.warn('Map loading failed',e);
     }
-}
-function btMapUseMyLocation(){
-    const button=document.getElementById('btMapMyLocation');
-    const hint=document.getElementById('btMapHint');
-    if(!btAddressMapInstance)return;
-    if(!navigator.geolocation){if(hint)hint.textContent='Геолокация недоступна. Найдите адрес через поиск или переместите карту.';return;}
-    if(button)button.disabled=true;
-    if(hint)hint.textContent='Определяем ваше местоположение…';
-    navigator.geolocation.getCurrentPosition(pos=>{
-        if(!btAddressMapInstance)return;
-        const {latitude,longitude}=pos.coords;
-        if(!Number.isFinite(latitude)||!Number.isFinite(longitude)||latitude<35||latitude>46||longitude<55||longitude>74){
-            if(hint)hint.textContent='Точка находится за пределами Узбекистана. Выберите адрес вручную.';
-        }else{
-            btAddressMapInstance.setView([latitude,longitude],17);
-            btAddressMapLabel='';
-            btMapUpdateCenter();
-            if(hint)hint.textContent='Проверьте, что метка стоит на месте ремонта, и подтвердите.';
-        }
-        if(button)button.disabled=false;
-    },err=>{
-        if(hint)hint.textContent=err.code===1?'Доступ к геолокации запрещён. Выберите точку вручную.':'Не удалось определить местоположение. Выберите точку вручную.';
-        if(button)button.disabled=false;
-    },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
 }
 async function btSearchAddressMap(){
     const query=document.getElementById('btMapSearch')?.value.trim();
@@ -1909,131 +1992,146 @@ async function btSearchAddressMap(){
                 const lat=Number(place.lat),lon=Number(place.lon);
                 if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
                 btAddressMapInstance?.setView([lat,lon],17);
-                btMapUpdateCenter();btAddressMapLabel=place.address||'';
+                btMapUpdateCenter();btAddressMapLabel=place.address||'';btMapScheduleReverse();
                 if(hint)hint.textContent='Проверьте точку на карте, при необходимости сдвиньте её и подтвердите.';
                 if(resultsBox)resultsBox.replaceChildren();
             });
             resultsBox?.appendChild(item);
         }
-        if(hint)hint.textContent='Выберите найденный адрес или укажите точку вручную.';
+        if(hint)hint.textContent='Сначала показаны адреса в радиусе 50 км от центра Ташкента. Выберите вариант или укажите точку вручную.';
     }catch(e){
         if(hint)hint.textContent='Поиск временно недоступен. Можно выбрать точку вручную на карте.';
         console.warn('Address search failed',e);
     }finally{if(button)button.disabled=false;}
 }
 
-async function btConfirmServiceArea(){
-    let areas=[];
-    try {
-        const result=await clientApi('/api/map/areas');
-        areas=Array.isArray(result.areas)?result.areas:[];
-    } catch(err) {
-        showAlert('Не удалось загрузить районы обслуживания: '+(err.message||'ошибка сети'));
-        return null;
-    }
-    if(!areas.length){showAlert('В системе пока нет мастеров с подтверждённым районом обслуживания. Обратитесь в поддержку.');return null;}
-    return new Promise(resolve=>{
-        const shade=document.createElement('div');
-        shade.style.cssText='position:fixed;inset:0;background:#000c;z-index:100010;display:grid;place-items:center;padding:16px';
-        const panel=document.createElement('div');
-        panel.style.cssText='background:#13263a;color:#fff;border:1px solid #4487c4;border-radius:14px;padding:18px;max-width:480px;width:100%';
-        const title=document.createElement('h3');title.textContent='Подтвердите район ремонта';panel.append(title);
-        const help=document.createElement('p');help.textContent='Автоматическое определение района недоступно или не совпало со справочником. Выберите район, в котором находится точка на карте.';panel.append(help);
-        const region=document.createElement('select'),district=document.createElement('select');
-        for(const el of [region,district]){el.style.cssText='display:block;width:100%;padding:12px;margin:10px 0;color:#13263a;background:white;border-radius:8px';panel.append(el);}
-        const fill=(select,items,placeholder)=>{select.replaceChildren();const blank=new Option(placeholder,'');select.add(blank);for(const value of items)select.add(new Option(value,value));};
-        fill(region,[...new Set(areas.map(x=>x.region))].sort(),'Выберите область');
-        const update=()=>fill(district,[...new Set(areas.filter(x=>x.region===region.value).map(x=>x.district))].sort(),'Выберите район');
-        region.onchange=update;update();
-        const actions=document.createElement('div');actions.style.cssText='display:flex;gap:10px';
-        const finish=value=>{shade.remove();resolve(value)};
-        const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Назад';cancel.onclick=()=>finish(null);
-        const confirm=document.createElement('button');confirm.type='button';confirm.textContent='Подтвердить';confirm.onclick=()=>{
-            if(!region.value||!district.value){showAlert('Выберите область и район');return;}
-            finish({region:region.value,district:district.value});
-        };
-        actions.append(cancel,confirm);panel.append(actions);shade.append(panel);document.body.append(shade);
-    });
+let btMapCatalog=null,btMapReverseSeq=0,btMapReverseTimer=null;
+async function btMapLoadRegions(){
+    try{const data=await clientApi('/api/map/areas');btMapCatalog=data.regions||{};}
+    catch(e){btMapCatalog={};document.getElementById('btMapHint').textContent='Не удалось загрузить справочник районов: '+(e.message||'ошибка');}
+    const select=document.getElementById('btMapRegion');if(!select)return;
+    select.replaceChildren(new Option('Выберите область',''));
+    Object.keys(btMapCatalog).forEach(k=>select.add(new Option(k,k)));
 }
-
-async function btConfirmAddressMap(){
+function btMapRegionChanged(){
+    const region=document.getElementById('btMapRegion')?.value||'';
+    const sel=document.getElementById('btMapDistrict');if(!sel)return;
+    sel.replaceChildren(new Option('Выберите город или район',''));
+    (btMapCatalog?.[region]||[]).forEach(k=>sel.add(new Option(k,k)));
+}
+function btMapNorm(s){return String(s||'').toLowerCase().replace(/ё/g,'е').replace(/[^a-zа-я0-9]/g,'').replace(/(ский|ская|ское|район|тумани|tumani|viloyati|область|город|shahri|шаҳри|шаҳар)/g,'');}
+function btMapApplyDetected(data){
+    const r=document.getElementById('btMapRegion');if(!r)return;
+    const rawRegion=btMapNorm(data.region),rawDistrict=btMapNorm(data.district);
+    const region=Object.keys(btMapCatalog||{}).find(x=>btMapNorm(x)===rawRegion||btMapNorm(x).includes(rawRegion)&&rawRegion.length>=5);
+    if(region){r.value=region;btMapRegionChanged();const d=document.getElementById('btMapDistrict');const matched=(btMapCatalog[region]||[]).find(x=>btMapNorm(x)===rawDistrict||btMapNorm(x).includes(rawDistrict)&&rawDistrict.length>=5);if(matched)d.value=matched;}
+    const address=document.getElementById('btMapAddressText');if(address&&data.address)address.value=data.address;
+}
+function btMapScheduleReverse(){
+    clearTimeout(btMapReverseTimer);const seq=++btMapReverseSeq;
+    btMapReverseTimer=setTimeout(()=>btMapResolveAddress(seq),550);
+}
+async function btMapResolveAddress(seq){
+    if(!btAddressMapInstance)return;
+    const current=seq||++btMapReverseSeq,point=btAddressMapInstance.getCenter();
+    const hint=document.getElementById('btMapHint');if(hint)hint.textContent='Определяем адрес выбранной точки…';
+    try{
+        const data=await clientApi('/api/map/reverse?lat='+encodeURIComponent(point.lat)+'&lon='+encodeURIComponent(point.lng));
+        if(current!==btMapReverseSeq||!document.getElementById('btAddressOverlay'))return;
+        btMapApplyDetected(data);
+        if(hint)hint.textContent='Проверьте область, район и адрес. При необходимости исправьте вручную.';
+    }catch(e){if(current===btMapReverseSeq&&hint)hint.textContent='Автоматическое определение недоступно. Выберите область и район вручную.';}
+}
+function btMapUseMyLocation(){
+    const hint=document.getElementById('btMapHint');
+    if(!navigator.geolocation){if(hint)hint.textContent='Геолокация недоступна';return;}
+    navigator.geolocation.getCurrentPosition(p=>{
+        btAddressMapInstance?.setView([p.coords.latitude,p.coords.longitude],17);
+        btMapScheduleReverse();
+    },()=>{if(hint)hint.textContent='Не удалось получить геолокацию. Выберите точку на карте.';},{enableHighAccuracy:true,timeout:12000});
+}
+function btConfirmAddressMap(){
     if(!btAddressMapInstance)return;
     const center=btAddressMapInstance.getCenter();
     if(!Number.isFinite(center.lat)||!Number.isFinite(center.lng))return;
-    if(center.lat<35||center.lat>46||center.lng<55||center.lng>74){const hint=document.getElementById('btMapHint');if(hint)hint.textContent='Выберите точку на территории Узбекистана.';return;}
-    const hint=document.getElementById('btMapHint');
-    const button=document.getElementById('btMapConfirm');
-    if(button)button.disabled=true;
-    let verified=null;
-    try {
-        verified=await clientApi('/api/map/reverse?lat='+encodeURIComponent(center.lat)+'&lon='+encodeURIComponent(center.lng));
-    } catch(e) {
-        console.warn('Reverse geocoding unavailable:',e);
-    } finally {if(button)button.disabled=false;}
-    // Saving a chosen GPS point must not depend on third-party geocoding uptime.
-    orderData.location={lat:Number(center.lat.toFixed(6)),lon:Number(center.lng.toFixed(6))};
-    orderData.serviceRegion=verified?.verified ? String(verified.region||'') : '';
-    orderData.serviceDistrict=verified?.verified ? String(verified.district||'') : '';
-    // Do not trust an arbitrary reverse-geocoder label as a matching key.
-    // The order flow will request a manual selection if no exact match exists.
-    try {
-        const areasResult=await clientApi('/api/map/areas');
-        const areas=Array.isArray(areasResult.areas)?areasResult.areas:[];
-        if(!areas.some(x=>x.region===orderData.serviceRegion && x.district===orderData.serviceDistrict)){
-            orderData.serviceRegion='';orderData.serviceDistrict='';
-        }
-    }catch(e){orderData.serviceRegion='';orderData.serviceDistrict='';}
-    orderData.mapAddress=verified?.address || btAddressMapLabel || '';
+    const region=document.getElementById('btMapRegion')?.value||'';
+    const district=document.getElementById('btMapDistrict')?.value||'';
+    if(!region||!district){const hint=document.getElementById('btMapHint');if(hint)hint.textContent='Выберите область и район, затем подтвердите точку.';return;}
+    orderData.location={lat:center.lat,lon:center.lng};
+    orderData.service_region=region;orderData.service_district=district;
+    orderData.mapAddress=document.getElementById('btMapAddressText')?.value.trim()||'';
     const status=document.getElementById('location_status');
-    if(status){
-      status.textContent='✅ Точка сохранена ('+orderData.location.lat.toFixed(6)+', '+orderData.location.lon.toFixed(6)+')'+(verified?.verified?' · '+orderData.serviceDistrict:' · Район пока не определён');
-      status.style.color='#43dba1';
-    }
+    if(status){status.textContent='✅ '+region+', '+district+' — точка подтверждена';status.style.color='#43dba1';}
     btCloseAddressMap();btClientUpdateSubmitGlow();
 }
 function btCloseAddressMap(){
     if(btAddressMapInstance){btAddressMapInstance.remove();btAddressMapInstance=null;}
+    clearTimeout(btMapReverseTimer);++btMapReverseSeq;
     btAddressMapPoint=null;btMapLayers=null;
     document.getElementById('btAddressOverlay')?.remove();
 }
 
-// Patch 06: choose an eligible master; broadcast will be enabled in patch 07.
-function btChooseMarketplaceMaster(masters){
-  return new Promise(resolve=>{
-    const shade=document.createElement('div');
-    shade.style.cssText='position:fixed;inset:0;background:#000b;z-index:99999;display:grid;place-items:center;padding:15px';
-    const panel=document.createElement('div');
-    panel.style.cssText='background:#13263a;color:white;border:1px solid #4487c4;border-radius:14px;padding:18px;max-width:480px;width:100%;max-height:85vh;overflow:auto';
-    const title=document.createElement('h3');title.textContent='Выберите мастера';panel.append(title);
-    const button=(label,action)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.style.cssText='margin:5px 0;padding:10px';b.onclick=action;return b};
-    const finish=value=>{shade.remove();resolve(value)};
-    const own=masters.find(m=>m.my_master);
-    if(own){const b=button('👨‍🔧 Вызвать моего мастера',()=>finish(own.master_id));b.style.width='100%';panel.append(b)}
-    const heading=document.createElement('h4');heading.textContent='Подходящие мастера';panel.append(heading);
-    if(!masters.length){const p=document.createElement('p');p.textContent='В вашем районе пока нет подходящих мастеров.';panel.append(p)}
-    for(const m of masters){
-      const card=document.createElement('article');card.style.cssText='border:1px solid #38618b;border-radius:12px;padding:12px;margin:10px 0;background:#19334b';
-      const top=document.createElement('div');top.style.cssText='display:flex;gap:12px;align-items:center';
-      if(typeof m.avatar==='string' && m.avatar.startsWith('data:image/jpeg;base64,') && m.avatar.length<=180000){
-        const avatar=document.createElement('img');avatar.src=m.avatar;avatar.alt='Фото мастера';avatar.style.cssText='width:52px;height:52px;border-radius:50%;object-fit:cover';top.append(avatar);
+// Master registration stage 1 extension: scoped UI, no global CSS changes.
+let btMasterApplicationCatalog=null;
+function btMasterApplicationStep(step){
+  for(let n=1;n<=3;n++){const el=document.getElementById('btMasterStep'+n);if(el)el.hidden=n!==step;}
+}
+function btMasterApplicationNext(step){
+  if(step===1){
+    const fields=['masterApplicationName','masterApplicationPhone','masterApplicationGender','masterApplicationBirthDate','masterApplicationPinfl'];
+    for(const id of fields){const el=document.getElementById(id);if(!el?.checkValidity()){el?.reportValidity();return;}}
+  }
+  if(step===2&&!document.querySelector('#btMasterApplySkills input:checked'))return showAlert('Выберите хотя бы одну специализацию.');
+  btMasterApplicationStep(step+1);
+}
+function btMasterApplyDistricts(){
+  const region=document.getElementById('btMasterApplyRegion'),district=document.getElementById('btMasterApplyDistrict');
+  if(!region||!district)return;
+  district.replaceChildren(new Option('Выберите город или район',''));
+  for(const name of btMasterApplicationCatalog?.regions?.[region.value]||[])district.add(new Option(name,name));
+}
+async function btMasterLoadApplicationCatalog(){
+  const status=document.getElementById('masterApplicationStatus');
+  try{
+    const catalog=await clientApi('/api/master/registration-catalog');
+    btMasterApplicationCatalog=catalog;
+    const region=document.getElementById('btMasterApplyRegion');if(!region)return;
+    region.replaceChildren(new Option('Выберите область',''));
+    for(const name of Object.keys(catalog.regions||{}))region.add(new Option(name,name));
+    btMasterApplyDistricts();
+    const root=document.getElementById('btMasterApplySkills');if(!root)return;
+    root.replaceChildren();
+    for(const [group,items] of Object.entries(catalog.skills||{})){
+      const section=document.createElement('fieldset');section.style.cssText='border:1px solid #49658a;border-radius:12px;padding:12px;margin:12px 0;min-width:0';
+      const legend=document.createElement('legend');legend.textContent=group;legend.style.fontWeight='700';section.append(legend);
+      for(const [code,label] of Object.entries(items)){
+        const line=document.createElement('label');line.style.cssText='display:flex;align-items:center;gap:10px;padding:7px 0;min-height:40px;cursor:pointer';
+        const input=document.createElement('input');input.type='checkbox';input.value=code;input.style.cssText='width:20px;height:20px;flex:0 0 20px;margin:0';
+        const span=document.createElement('span');span.textContent=label;line.append(input,span);section.append(line);
       }
-      const detail=document.createElement('div');
-      const name=document.createElement('strong');name.textContent=String(m.name||'Мастер');detail.append(name);
-      const line=document.createElement('div');line.textContent='⭐ '+(Number(m.rating)>0?Number(m.rating).toFixed(1):'Нет оценок')+' · '+Number(m.review_count||0)+' отзывов';detail.append(line);top.append(detail);card.append(top);
-      const info=document.createElement('p');info.style.cssText='margin:8px 0;font-size:13px';
-      info.textContent='Район: '+String(m.district||'—')+' · Выдано актов по услуге: '+Number(m.issued_acts||0)+' · Выезд и диагностика: '+Number(m.diagnostic_price_uzs||0).toLocaleString('ru-RU')+' сум';card.append(info);
-      const actions=document.createElement('div');actions.style.cssText='display:flex;gap:8px;flex-wrap:wrap';
-      actions.append(button('Выбрать',()=>finish(m.master_id)));
-      actions.append(button('Отзывы и информация',()=>{
-        const old=card.querySelector('.bt-marketplace-details');if(old){old.remove();return}
-        const more=document.createElement('div');more.className='bt-marketplace-details';more.style.cssText='padding:8px 0;font-size:13px';
-        const about=document.createElement('p');about.textContent=String(m.about||'Мастер пока не добавил информацию о себе.');more.append(about);
-        const summary=document.createElement('p');summary.textContent='Рейтинг: '+(Number(m.rating)>0?m.rating:'пока нет')+' · Отзывов: '+Number(m.review_count||0);more.append(summary);
-        card.append(more);
-      }));card.append(actions);panel.append(card);
+      root.append(section);
     }
-    const broadcast=button('⚡ Найти свободного мастера',()=>finish('public'));broadcast.style.width='100%';panel.append(broadcast);
-    const back=button('Назад к заявке',()=>finish(null));back.style.width='100%';panel.append(back);
-    shade.append(panel);document.body.append(shade);
-  });
+  }catch(e){if(status){status.textContent='Не удалось загрузить справочник: '+e.message;status.className='error';}}
+}
+
+// Client cashback is server-authoritative. Never cache balances in localStorage.
+function btCashbackMoney(tiyin){
+  const sum=Math.floor(Number(tiyin||0)/100);
+  return (Number.isFinite(sum)?sum:0).toLocaleString('ru-RU')+' сум';
+}
+async function btRefreshClientCashback(){
+  const el=document.getElementById('btCashbackBalance');if(!el)return;
+  try{const data=await clientApi('/api/client/cashback');if(el.isConnected)el.textContent=btCashbackMoney(data.available_tiyin);}
+  catch(_){if(el.isConnected)el.textContent='Недоступно';}
+}
+async function showClientCashback(){
+  setPage('Кешбэк', '<article class="card"><h3>Кешбэк за ремонты</h3><p id="btCashbackSummary">Загрузка…</p><p class="subtitle">1% за завершённый ремонт. Срок действия каждого начисления — 365 дней. Вывод деньгами невозможен.</p><div id="btCashbackHistory"></div></article>');
+  try{
+    const data=await clientApi('/api/client/cashback');
+    const sum=document.getElementById('btCashbackSummary'), history=document.getElementById('btCashbackHistory');
+    if(sum)sum.textContent='Доступно: '+btCashbackMoney(data.available_tiyin);
+    if(history){const rows=Array.isArray(data.history)?data.history:[];
+      history.innerHTML=rows.length?rows.map(x=>'<div class="bt-live-panel" style="margin:8px 0"><strong>'+({earned:'Начисление',spent:'Использовано',expired:'Сгорело'}[x.kind]||'Операция')+'</strong> — '+btCashbackMoney(x.amount_tiyin)+'<small style="display:block">'+escapeClient(String(x.created_at||'').slice(0,16))+(x.expires_at?' · До '+escapeClient(String(x.expires_at).slice(0,10)):'')+'</small></div>').join(''):'<p class="subtitle">Операций пока нет.</p>';
+    }
+  }catch(e){const el=document.getElementById('btCashbackSummary');if(el)el.textContent='Не удалось загрузить историю: '+(e.message||'ошибка');}
 }

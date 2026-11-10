@@ -98,7 +98,8 @@ function masterActSummary(number){
  <p><b>Выполненные работы:</b></p><ol>${works.map(w=>`<li>${masterEsc(w)}</li>`).join('')||'<li>Не указаны</li>'}</ol>
  <p><b>Стоимость ремонта:</b> ${masterEsc(fmt(act.price))} сум</p>
  ${Number(act.discount_amount||0)>0?`<p><b>Скидка:</b> −${masterEsc(fmt(act.discount_amount))} сум</p>`:''}
- <p><b>Итого к оплате:</b> ${masterEsc(money)} сум</p>
+ <p><b>Стоимость после скидок:</b> ${masterEsc(money)} сум</p>
+ ${Number(act.cashback_used_tiyin||0)>0?`<p><b>Списано кешбэком:</b> −${masterEsc(fmt(Number(act.cashback_used_tiyin)/100))} сум</p><p><b>Клиент оплатил:</b> ${masterEsc(fmt(act.client_due_sum))} сум</p><p><b>На депозит мастера:</b> +${masterEsc(fmt(Number(act.cashback_used_tiyin)/100))} сум</p>`:''}
  ${act.amounts_need_review?'<p class="error">Внимание: сумма старого акта требует сверки администратором.</p>':''}
  <p><b>Гарантия:</b> ${masterEsc(act.guarantee_text||'—')}</p>
  <p><b>Статус:</b> ${masterEsc(masterActStatus(act.status))}</p></div>`;
@@ -199,7 +200,7 @@ function btMasterRestoreRoute(title){
    'Чаты':()=>showMasterMessages(),
    'Акты':()=>showMasterActs(),
    'Промокоды':()=>showMasterPromos(),
-   'Новый промокод':()=>showCreateMasterPromo(),
+   'Новый промокод':()=>masterToast('Промокоды создаёт только администратор.',true),
    'Настройки профиля':()=>showMasterProfile(),
    'Написать в поддержку':()=>showMasterSupport(),
    'Рекламная ссылка':()=>showMasterMarketingLink(),
@@ -409,7 +410,7 @@ async function renderMasterMenu() {
     <button class="menu-btn" onclick="showMasterOrders()"><span class="emoji">▤</span><b>Заявки</b><small>Все обращения</small></button>
     <button class="menu-btn" onclick="showMasterActs()"><span class="emoji">▧</span><b>Акты</b><small>Документы</small></button>
     <button class="menu-btn" onclick="showMasterClients()"><span class="emoji">♙</span><b>Клиенты</b><small>Контакты</small></button>
-    <button class="menu-btn" onclick="showMasterPromos()"><span class="emoji">◇</span><b>Промокоды</b><small>Скидки</small></button>
+    <button class="menu-btn" onclick="showMasterPromos()"><span class="emoji">◇</span><b>Промокоды</b><small>Только просмотр</small></button>
     <button class="menu-btn" onclick="showMasterFinanceReport()"><span class="emoji">▥</span><b>Финансы</b><small>Отчёт</small></button>
     <button class="menu-btn" onclick="showMasterInviteLink()"><span class="emoji">↗</span><b>Моя ссылка</b><small>Для клиентов</small></button>
     <button class="menu-btn" onclick="showMasterPaymentQr()"><span class="emoji">▦</span><b>Paynet Xolis</b><small>Ссылка для оплаты</small></button>
@@ -424,8 +425,8 @@ async function renderMasterMenu() {
   void btMasterRefreshDeposit();
 }
 function showMasterFAQ(){
- const ru=[["Как зарегистрироваться мастером?", "Откройте приложение мастера в Telegram, заполните ФИО, телефон и остальные обязательные данные. Отправьте заявку на рассмотрение; после одобрения откроется кабинет."], ["Какие два способа создать заявку?", "Первый: открыть соответствующий раздел в кабинете и заполнить заявку. Второй: отправить или переслать геолокацию клиента прямо в чат бота и продолжить оформление через предложенные кнопки."], ["ВАЖНО: как быстро оформить заявку через локацию?", "Когда клиент прислал Вам геолокацию, перешлите её боту. Или сами отправьте точку в чат бота. Бот предложит продолжить оформление. Это удобно при обращении по телефону или в личной переписке; сама локация ещё не создаёт готовую заявку."], ["Как принимать заявки?", "В разделе «Заявки» откройте новое обращение, проверьте сведения и нажмите «Принять». Не принимайте заявки, которые не сможете выполнить."], ["Как открыть маршрут?", "В принятой заявке нажмите «Показать маршрут», если сохранены координаты или адрес. Перед выездом уточните точный адрес у клиента."], ["Как связаться с клиентом?", "Откройте чат из заявки или раздел «Чаты»; уточните неисправность, время и адрес."], ["Как создать акт по заявке?", "Откройте принятую заявку → «Создать акт», заполните работы, детали, стоимость, гарантию и обязательные поля, проверьте итоговую сумму."], ["Как создать акт без заявки?", "На главной выберите «Создать акт» и укажите имя и телефон клиента, технику, работы, стоимость, гарантию и адрес. Такой вариант подходит для обращений лично или по телефону."], ["Как учитываются скидки?", "Если у найденного клиента действует промокод или реферальная скидка, предварительная итоговая сумма показывается над кнопкой «Создать акт». При выдаче акта сервер пересчитывает сумму по действующим правилам."], ["Что означает кнопка «Создать акт»?", "Нажатие подтверждает получение оплаты за ремонт согласно предупреждению в форме. Перед нажатием проверьте данные и сумму."], ["Где посмотреть акт и гарантию?", "Откройте «Акты», выберите нужный документ и PDF. В нём зафиксированы работы, стоимость и гарантийные условия."], ["Как исправить акт?", "Откройте акт и отправьте запрос на исправление, если функция доступна. Не создавайте повторный акт взамен уже выданного."], ["Как клиент подтверждает акт?", "Клиент может подтвердить акт в доступном интерфейсе. Если он не отвечает, предусмотрено автоматическое подтверждение по настроенному сроку."], ["Как клиент оставляет отзыв?", "После ремонта клиенту доступно приглашение оценить работу. Попросите его оставить честную оценку, не навязывая ответ."], ["Как работает комиссия и депозит?", "Комиссия рассчитывается при выдаче акта по действующему тарифу. Баланс и операции смотрите в разделе финансов. При недостатке депозита создание новых актов может быть ограничено."], ["Как пополнить депозит?", "Откройте баланс, перейдите по доступной ссылке оплаты, прикрепите чек при необходимости и дождитесь проверки."], ["Как работают промокоды и рекламная ссылка?", "В соответствующих разделах создавайте промокоды и получайте ссылку для клиентов. Условия, срок действия, лимиты и вознаграждение партнёра указаны в настройках."], ["Что даёт идентификация?", "Она добровольная. После проверки документов администратором появляется отметка «Личность проверена». За первое одобрение предусмотрен однократный бонус 20 000 сум."], ["Как написать в поддержку или группу?", "Откройте «Написать в поддержку» в кабинете мастера, опишите проблему и укажите номер заявки или акта. Если опубликована официальная ссылка на группу поддержки, используйте её. Не отправляйте пароли и токены."], ["Что делать, если Mini App не обновился?", "Полностью закройте Mini App и откройте его из актуальной кнопки в чате Telegram."]];
- const uz=[["Usta sifatida qanday ro‘yxatdan o‘taman?", "Telegramdagi usta ilovasini oching, F.I.Sh., telefon va boshqa majburiy ma’lumotlarni kiriting. Ariza tasdiqlangach kabinet ochiladi."], ["Buyurtma yaratishning ikki usuli qanday?", "Birinchisi: kabinetdagi buyurtma shaklini to‘ldirish. Ikkinchisi: mijoz lokatsiyasini bot chatiga yuborish yoki uzatish va bot ko‘rsatgan bosqichlarni davom ettirish."], ["MUHIM: lokatsiya orqali qanday tez boshlash mumkin?", "Mijoz sizga lokatsiya yuborgan bo‘lsa, uni botga uzating. Yoki o‘zingiz bot chatiga nuqta yuboring. Bot buyurtmani davom ettirishni taklif qiladi. Faqat lokatsiya yuborish tayyor buyurtma degani emas."], ["Buyurtmani qanday qabul qilaman?", "«Buyurtmalar» bo‘limida yangi murojaatni oching, ma’lumotlarni tekshiring va «Qabul qilish» tugmasini bosing."], ["Mijozga yo‘nalishni qanday ochaman?", "Qabul qilingan buyurtmada koordinata yoki manzil bo‘lsa, «Marshrutni ko‘rsatish» tugmasini bosing."], ["Mijoz bilan qanday bog‘lanaman?", "Buyurtma yoki «Chatlar» bo‘limidan yozing, manzil va vaqtni aniqlashtiring."], ["Buyurtma asosida dalolatnoma qanday yaratiladi?", "Qabul qilingan buyurtmadan «Dalolatnoma yaratish»ni tanlang, ishlar, narx, kafolat va kerakli ma’lumotlarni kiriting."], ["Buyurtmasiz dalolatnoma yaratish mumkinmi?", "Ha. Asosiy sahifada «Dalolatnoma yaratish»ni tanlang, mijoz ismi, telefon, texnika, ishlar, narx va manzilni kiriting."], ["Chegirmalar qanday hisoblanadi?", "Mijozda amaldagi promokod yoki taklif chegirmasi bo‘lsa, tugma ustida taxminiy yakuniy summa ko‘rsatiladi. Dalolatnoma chiqarilganda server summani qayta tekshiradi."], ["«Dalolatnoma yaratish» nimani tasdiqlaydi?", "Tugmani bosish ta’mir uchun to‘lov olinganini tasdiqlaydi. Oldin ma’lumot va summani tekshiring."], ["Dalolatnoma va kafolat qayerda?", "«Dalolatnomalar» bo‘limida kerakli PDFni oching. Ishlar, narx va kafolat shu yerda."], ["Dalolatnomadagi xatoni qanday tuzataman?", "Mavjud bo‘lsa, dalolatnomadan tuzatish so‘rovini yuboring. Takroriy dalolatnoma yaratmang."], ["Mijoz dalolatnomani qanday tasdiqlaydi?", "Mijoz tasdiqlash tugmasidan foydalanishi mumkin. Javob bo‘lmasa, belgilangan vaqtdan so‘ng avtomatik tasdiqlash ishlashi mumkin."], ["Mijoz qanday fikr qoldiradi?", "Ta’mirdan keyin mijoz baholash taklifini olishi mumkin. Halol baho qoldirishni so‘rang."], ["Komissiya va depozit qanday ishlaydi?", "Komissiya dalolatnoma chiqarilganda tarif bo‘yicha hisoblanadi. Balans va operatsiyalarni moliya bo‘limida ko‘ring."], ["Depozitni qanday to‘ldiraman?", "Balans sahifasidan to‘lov havolasiga o‘ting, kerak bo‘lsa chekni biriktiring va tekshiruvni kuting."], ["Promokod va reklama havolasi nima?", "Tegishli bo‘limlarda mijozlar uchun kodlar va havolalarni boshqaring; muddat va limitlarga rioya qiling."], ["Shaxsni tasdiqlash nima beradi?", "Ixtiyoriy tekshiruvdan so‘ng «Shaxs tasdiqlangan» belgisi paydo bo‘ladi. Birinchi tasdiq uchun bir martalik 20 000 so‘m bonus belgilangan."], ["Yordamga yoki guruhga qanday yozaman?", "Kabinetdagi «Yordamga yozish» orqali muammo va buyurtma/dalolatnoma raqamini yuboring. Rasmiy guruh havolasi bo‘lsa, undan foydalaning. Parol va token yubormang."], ["Mini App yangilanmasa nima qilaman?", "Ilovani to‘liq yoping va Telegramdagi yangi tugma orqali qayta oching."]];
+ const ru=[["Как зарегистрироваться мастером?", "Откройте приложение мастера в Telegram, заполните ФИО, телефон и остальные обязательные данные. Отправьте заявку на рассмотрение; после одобрения откроется кабинет."], ["Какие два способа создать заявку?", "Первый: открыть соответствующий раздел в кабинете и заполнить заявку. Второй: отправить или переслать геолокацию клиента прямо в чат бота и продолжить оформление через предложенные кнопки."], ["ВАЖНО: как быстро оформить заявку через локацию?", "Когда клиент прислал Вам геолокацию, перешлите её боту. Или сами отправьте точку в чат бота. Бот предложит продолжить оформление. Это удобно при обращении по телефону или в личной переписке; сама локация ещё не создаёт готовую заявку."], ["Как принимать заявки?", "В разделе «Заявки» откройте новое обращение, проверьте сведения и нажмите «Принять». Не принимайте заявки, которые не сможете выполнить."], ["Как открыть маршрут?", "В принятой заявке нажмите «Показать маршрут», если сохранены координаты или адрес. Перед выездом уточните точный адрес у клиента."], ["Как связаться с клиентом?", "Откройте чат из заявки или раздел «Чаты»; уточните неисправность, время и адрес."], ["Как создать акт по заявке?", "Откройте принятую заявку → «Создать акт», заполните работы, детали, стоимость, гарантию и обязательные поля, проверьте итоговую сумму."], ["Как создать акт без заявки?", "На главной выберите «Создать акт» и укажите имя и телефон клиента, технику, работы, стоимость, гарантию и адрес. Такой вариант подходит для обращений лично или по телефону."], ["Как учитываются скидки?", "Если у найденного клиента действует промокод или реферальная скидка, предварительная итоговая сумма показывается над кнопкой «Создать акт». При выдаче акта сервер пересчитывает сумму по действующим правилам."], ["Что означает кнопка «Создать акт»?", "Нажатие подтверждает получение оплаты за ремонт согласно предупреждению в форме. Перед нажатием проверьте данные и сумму."], ["Где посмотреть акт и гарантию?", "Откройте «Акты», выберите нужный документ и PDF. В нём зафиксированы работы, стоимость и гарантийные условия."], ["Как исправить акт?", "Откройте акт и отправьте запрос на исправление, если функция доступна. Не создавайте повторный акт взамен уже выданного."], ["Как клиент подтверждает акт?", "Клиент может подтвердить акт в доступном интерфейсе. Если он не отвечает, предусмотрено автоматическое подтверждение по настроенному сроку."], ["Как клиент оставляет отзыв?", "После ремонта клиенту доступно приглашение оценить работу. Попросите его оставить честную оценку, не навязывая ответ."], ["Как работает комиссия и депозит?", "Комиссия рассчитывается при выдаче акта по действующему тарифу. Баланс и операции смотрите в разделе финансов. При недостатке депозита создание новых актов может быть ограничено."], ["Как пополнить депозит?", "Откройте баланс, перейдите по доступной ссылке оплаты, прикрепите чек при необходимости и дождитесь проверки."], ["Как работают промокоды и рекламная ссылка?", "Промокоды создаёт только администратор и они действуют на всей платформе."], ["Что даёт идентификация?", "Она добровольная. После проверки документов администратором появляется отметка «Личность проверена». За первое одобрение предусмотрен однократный бонус 20 000 сум."], ["Как написать в поддержку или группу?", "Откройте «Написать в поддержку» в кабинете мастера, опишите проблему и укажите номер заявки или акта. Если опубликована официальная ссылка на группу поддержки, используйте её. Не отправляйте пароли и токены."], ["Что делать, если Mini App не обновился?", "Полностью закройте Mini App и откройте его из актуальной кнопки в чате Telegram."]];
+ const uz=[["Usta sifatida qanday ro‘yxatdan o‘taman?", "Telegramdagi usta ilovasini oching, F.I.Sh., telefon va boshqa majburiy ma’lumotlarni kiriting. Ariza tasdiqlangach kabinet ochiladi."], ["Buyurtma yaratishning ikki usuli qanday?", "Birinchisi: kabinetdagi buyurtma shaklini to‘ldirish. Ikkinchisi: mijoz lokatsiyasini bot chatiga yuborish yoki uzatish va bot ko‘rsatgan bosqichlarni davom ettirish."], ["MUHIM: lokatsiya orqali qanday tez boshlash mumkin?", "Mijoz sizga lokatsiya yuborgan bo‘lsa, uni botga uzating. Yoki o‘zingiz bot chatiga nuqta yuboring. Bot buyurtmani davom ettirishni taklif qiladi. Faqat lokatsiya yuborish tayyor buyurtma degani emas."], ["Buyurtmani qanday qabul qilaman?", "«Buyurtmalar» bo‘limida yangi murojaatni oching, ma’lumotlarni tekshiring va «Qabul qilish» tugmasini bosing."], ["Mijozga yo‘nalishni qanday ochaman?", "Qabul qilingan buyurtmada koordinata yoki manzil bo‘lsa, «Marshrutni ko‘rsatish» tugmasini bosing."], ["Mijoz bilan qanday bog‘lanaman?", "Buyurtma yoki «Chatlar» bo‘limidan yozing, manzil va vaqtni aniqlashtiring."], ["Buyurtma asosida dalolatnoma qanday yaratiladi?", "Qabul qilingan buyurtmadan «Dalolatnoma yaratish»ni tanlang, ishlar, narx, kafolat va kerakli ma’lumotlarni kiriting."], ["Buyurtmasiz dalolatnoma yaratish mumkinmi?", "Ha. Asosiy sahifada «Dalolatnoma yaratish»ni tanlang, mijoz ismi, telefon, texnika, ishlar, narx va manzilni kiriting."], ["Chegirmalar qanday hisoblanadi?", "Mijozda amaldagi promokod yoki taklif chegirmasi bo‘lsa, tugma ustida taxminiy yakuniy summa ko‘rsatiladi. Dalolatnoma chiqarilganda server summani qayta tekshiradi."], ["«Dalolatnoma yaratish» nimani tasdiqlaydi?", "Tugmani bosish ta’mir uchun to‘lov olinganini tasdiqlaydi. Oldin ma’lumot va summani tekshiring."], ["Dalolatnoma va kafolat qayerda?", "«Dalolatnomalar» bo‘limida kerakli PDFni oching. Ishlar, narx va kafolat shu yerda."], ["Dalolatnomadagi xatoni qanday tuzataman?", "Mavjud bo‘lsa, dalolatnomadan tuzatish so‘rovini yuboring. Takroriy dalolatnoma yaratmang."], ["Mijoz dalolatnomani qanday tasdiqlaydi?", "Mijoz tasdiqlash tugmasidan foydalanishi mumkin. Javob bo‘lmasa, belgilangan vaqtdan so‘ng avtomatik tasdiqlash ishlashi mumkin."], ["Mijoz qanday fikr qoldiradi?", "Ta’mirdan keyin mijoz baholash taklifini olishi mumkin. Halol baho qoldirishni so‘rang."], ["Komissiya va depozit qanday ishlaydi?", "Komissiya dalolatnoma chiqarilganda tarif bo‘yicha hisoblanadi. Balans va operatsiyalarni moliya bo‘limida ko‘ring."], ["Depozitni qanday to‘ldiraman?", "Balans sahifasidan to‘lov havolasiga o‘ting, kerak bo‘lsa chekni biriktiring va tekshiruvni kuting."], ["Promokod va reklama havolasi nima?", "Promokodlarni faqat administrator yaratadi; ular butun platformada amal qiladi."], ["Shaxsni tasdiqlash nima beradi?", "Ixtiyoriy tekshiruvdan so‘ng «Shaxs tasdiqlangan» belgisi paydo bo‘ladi. Birinchi tasdiq uchun bir martalik 20 000 so‘m bonus belgilangan."], ["Yordamga yoki guruhga qanday yozaman?", "Kabinetdagi «Yordamga yozish» orqali muammo va buyurtma/dalolatnoma raqamini yuboring. Rasmiy guruh havolasi bo‘lsa, undan foydalaning. Parol va token yubormang."], ["Mini App yangilanmasa nima qilaman?", "Ilovani to‘liq yoping va Telegramdagi yangi tugma orqali qayta oching."]];
  ru.push(['Правовая информация','ТехСервис предоставляет программную платформу. Мастер самостоятельно отвечает за ремонт, оплату, гарантию и налоги. Полные условия и политика данных доступны по кнопке ниже.']);
  uz.push(['Huquqiy ma’lumot','TehServis raqamli platforma. Usta ta’mirlash, to‘lov, kafolat va soliqlar uchun mustaqil javob beradi. To‘liq hujjatlar quyidagi tugma orqali ochiladi.']);
  const language=(document.documentElement.lang||localStorage.getItem('remont_lang')||'ru').toLowerCase();
@@ -515,14 +516,19 @@ function statusLabel(s){return ({new:'Новая',accepted:'Принята',reje
 async function showMasterOrders(){try{await loadMasterData();}catch(e){return masterShell('Заявки',`<article class="card error">${masterEsc(e.message)}</article>`)}
  const rows=masterCache.orders.map(o=>{
    const id=masterEsc(o.id),route=masterOrderDestination(o);
-   const actions=`${o.status==='new'?`<button onclick="decideMasterOrder('${id}','accept')">✓ Принять</button><button class="secondary" onclick="decideMasterOrder('${id}','reject')">Отклонить</button>`:''}${o.status==='accepted'&&!o.act_number?`<button onclick="showMasterCreateAct('${id}')">📄 Создать акт</button>`:''}${o.client_id?`<button class="secondary" onclick="openMasterChat('${masterEsc(o.client_id)}')">💬 Чат</button>`:''}${o.status==='accepted'&&route?`<button type="button" class="secondary" onclick="showMasterRoute('${id}')">📍 Показать маршрут</button>`:''}`;
-   return `<article class="card order-card bt-order-compact ${o.status==='new'?'bt-new-order':''}"><div class="card-row"><b>${id}</b><span class="status-pill ${o.status==='new'?'status-new':''}">${masterEsc(statusLabel(o.status))}</span></div><div class="bt-order-summary"><strong>${masterEsc([o.device,o.brand,o.model].filter(Boolean).join(' ')||'Ремонт техники')}</strong><span>${masterEsc(o.client_name||'Клиент')}</span></div><p class="subtitle bt-order-short">${masterEsc([o.when_date,o.when_time,o.address||o.house].filter(Boolean).join(' · '))}</p><details class="bt-order-details"><summary>Подробнее о заявке</summary><p><b>Телефон:</b> ${masterEsc(o.client_phone||'—')}</p><p>${masterEsc(o.problem||o.comment||'Описание не указано')}</p>${o.status==='archived_admin'?`<p><b>Причина удаления:</b> ${masterEsc(o.admin_archive_reason||'Не указана')}</p>`:''}</details><div class="button-row bt-order-actions">${actions}</div></article>`;
+   const actions=`${o.status==='new'?`<button onclick="decideMasterOrder('${id}','accept')">✓ Принять</button><button class="secondary" onclick="decideMasterOrder('${id}','reject')">Отклонить</button>`:''}${o.status==='accepted'&&!o.act_number?`<button type="button" class="secondary" onclick="btMasterCancelAccepted('${id}')">Отменить заявку</button>`:''}${o.status==='accepted'&&!o.act_number?`<button onclick="showMasterCreateAct('${id}')">📄 Создать акт</button>`:''}${o.client_id?`<button class="secondary" onclick="openMasterChat('${masterEsc(o.client_id)}')">💬 Чат</button>`:''}${o.status==='accepted'&&route?`<button type="button" class="secondary" onclick="showMasterRoute('${id}')">📍 Показать маршрут</button>`:''}`;
+   return `<article class="card order-card bt-order-compact ${o.status==='new'?'bt-new-order':''}"><div class="card-row"><b>${id}</b><span class="status-pill ${o.status==='new'?'status-new':''}">${masterEsc(statusLabel(o.status))}</span></div><p class="subtitle"><b>${o.master_search_mode==='free'||o.source_public||o.is_public||o.public_request?'Общая площадка':'Личная заявка'}</b></p><div class="bt-order-summary"><strong>${masterEsc([o.device,o.brand,o.model].filter(Boolean).join(' ')||'Ремонт техники')}</strong><span>${masterEsc(o.client_name||'Клиент')}</span></div><p class="subtitle bt-order-short">${masterEsc([o.when_date,o.when_time,o.address||o.house].filter(Boolean).join(' · '))}</p><details class="bt-order-details"><summary>Подробнее о заявке</summary><p><b>Телефон:</b> ${masterEsc(o.client_phone||'—')}</p><p>${masterEsc(o.problem||o.comment||'Описание не указано')}</p>${o.status==='archived_admin'?`<p><b>Причина удаления:</b> ${masterEsc(o.admin_archive_reason||'Не указана')}</p>`:''}</details><div class="button-row bt-order-actions">${actions}</div></article>`;
  }).join('');
  const initialFilter=masterCache.orders.some(o=>o.status==='new')?'new':masterCache.orders.some(o=>o.status==='accepted')?'accepted':'all';
- masterShell('Заявки',`<div class="section-heading"><p>Сначала показываются последние заявки. Действия доступны только по заявкам вашего кабинета.</p><select id="orderFilter" onchange="filterMasterOrders()"><option value="all">Все статусы</option><option value="new">Новые</option><option value="accepted">Принятые</option><option value="act_issued">Акт отправлен</option><option value="closed">Закрытые</option><option value="archived_admin">Архив (удалены администратором)</option></select></div><div id="masterOrderList" class="stack-list">${rows||'<article class="card">Заявок пока нет.</article>'}</div>`);
+ masterShell('Заявки',`<div class="section-heading"><p>Сначала показываются последние заявки. Действия доступны только по заявкам вашего кабинета.</p><select id="btOrderSourceFilter" onchange="filterMasterOrders()"><option value="all">Все источники</option><option value="personal">Личные заявки</option><option value="platform">Общая площадка</option></select><select id="orderFilter" onchange="filterMasterOrders()"><option value="all">Все статусы</option><option value="new">Новые</option><option value="accepted">Принятые</option><option value="act_issued">Акт отправлен</option><option value="closed">Закрытые</option><option value="archived_admin">Архив (удалены администратором)</option></select></div><div id="masterOrderList" class="stack-list">${rows||'<article class="card">Заявок пока нет.</article>'}</div>`);
  const filter=document.getElementById('orderFilter');if(filter){filter.value=initialFilter;filterMasterOrders();}
 }
-function filterMasterOrders(){const f=document.getElementById('orderFilter')?.value||'all';document.querySelectorAll('#masterOrderList .order-card').forEach((el,i)=>{const o=masterCache.orders[i];el.style.display=f==='all'||o?.status===f?'':'none';});}
+function filterMasterOrders(){const f=document.getElementById('orderFilter')?.value||'all';document.querySelectorAll('#masterOrderList .order-card').forEach((el,i)=>{const o=masterCache.orders[i];const source=document.getElementById('btOrderSourceFilter')?.value||'all';const platform=o?.master_search_mode==='free'||o?.is_public||o?.public_request;el.style.display=(f==='all'||o?.status===f)&&(source==='all'||(source==='platform'&&platform)||(source==='personal'&&!platform))?'':'none';});}
+async function btMasterCancelAccepted(id){
+ const reason=prompt('Причина отмены принятой заявки (минимум 5 символов):');if(reason===null)return;
+ try{const r=await masterApi(`/api/master/orders/${encodeURIComponent(id)}/cancel`,'POST',{reason});masterToast(r.message);await showMasterOrders();}
+ catch(e){masterToast(e.message,true);}
+}
 async function decideMasterOrder(id,decision){try{const r=await masterApi(`/api/master/orders/${encodeURIComponent(id)}/decision`,'POST',{decision});masterToast(r.message);await showMasterOrders();}catch(e){masterToast(e.message,true);}}
 // Search is intentionally blank until the master supplies a full phone number.
 function btClientPhone(value){let d=String(value||'').replace(/\D/g,'');if(d.length===9)d='998'+d;return d;}
@@ -864,12 +870,16 @@ function btActQuoteDisplay(data){
  const box=document.getElementById('actDiscountQuote');if(!box)return;
  const discount=Number(data.discount_amount||0),final=Number(data.final_price);
  if(!Number.isFinite(discount)||!Number.isFinite(final)||discount<0||final<0)throw new Error('Сервер вернул некорректный расчёт скидки.');
- if(discount===0){btActQuoteHide();return;}
+ if(discount===0 && Number(data.cashback_used_tiyin||0)===0){btActQuoteHide();return;}
  const title=document.createElement('b');title.textContent=String(data.label||'Скидка клиента');
  const amount=document.createElement('div');amount.textContent='Скидка: −'+Math.round(discount).toLocaleString('ru-RU')+' сум';
  const total=document.createElement('b');total.textContent='Итого к оплате: '+Math.round(final).toLocaleString('ru-RU')+' сум';
- const note=document.createElement('small');note.textContent='Предварительный расчёт. При выдаче акта сервер проверит скидку повторно.';
- box.replaceChildren(title,amount,total,note);box.hidden=false;
+ const cashback=Number(data.cashback_used_tiyin||0)/100;
+ const cashbackText=document.createElement('div');cashbackText.textContent='Кешбэк: −'+Math.round(cashback).toLocaleString('ru-RU')+' сум';
+ const dueText=document.createElement('b');dueText.textContent='Клиент оплачивает: '+Math.round(Number(data.client_due_sum??final)).toLocaleString('ru-RU')+' сум';
+ const depositText=document.createElement('div');depositText.textContent='Зачисление мастеру на депозит: +'+Math.round(cashback).toLocaleString('ru-RU')+' сум';
+ const note=document.createElement('small');note.textContent='Предварительный расчёт. При выдаче акта сервер повторно проверит доступный кешбэк и скидку.';
+ box.replaceChildren(title,amount,total,...(cashback>0?[cashbackText,dueText,depositText]:[]),note);box.hidden=false;
 }
 function btActQuoteBind(orderId){
  btActQuoteOrderId=String(orderId||'');btActQuoteVersion++;btActQuoteVerified=null;
@@ -885,7 +895,7 @@ function btActQuoteSchedule(){
    const data=await masterApi('/api/master/act/quote','POST',input);
    if(version!==btActQuoteVersion||!document.getElementById('actDiscountQuote'))return;
    if(Number(data.price)!==input.price)throw new Error('Расчёт не совпадает с введённой стоимостью.');
-   btActQuoteVerified={signature:btActQuoteSignature(input),discount:Number(data.discount_amount||0),final:Number(data.final_price)};
+   btActQuoteVerified={signature:btActQuoteSignature(input),discount:Number(data.discount_amount||0),final:Number(data.final_price),cashback:Number(data.cashback_used_tiyin||0)};
    btActQuoteDisplay(data);
   }catch(error){if(version===btActQuoteVersion){btActQuoteVerified=null;btActQuoteMessage('⚠️ Не удалось проверить скидку: '+(error.message||'ошибка сервера')+'. Создание акта недоступно до успешной проверки.');}}
  },350);
@@ -900,9 +910,9 @@ async function btActQuoteBeforeSubmit(){
  catch(error){btActQuoteMessage('⚠️ Проверка скидки не удалась: '+(error.message||'ошибка сервера'));throw new Error('Акт не создан: невозможно проверить итоговую стоимость. Повторите попытку.');}
  const discount=Number(data.discount_amount||0),final=Number(data.final_price);
  if(Number(data.price)!==input.price||!Number.isSafeInteger(discount)||discount<0||!Number.isSafeInteger(final)||final<0||discount+final!==input.price)throw new Error('Акт не создан: сервер вернул некорректный расчёт.');
- btActQuoteVerified={signature,discount,final};btActQuoteDisplay(data);
+ btActQuoteVerified={signature,discount,final,cashback:Number(data.cashback_used_tiyin||0)};btActQuoteDisplay(data);
  // A new/changed discount must be seen before the master confirms payment.
- if(discount>0&&(!previous||previous.signature!==signature||previous.discount!==discount||previous.final!==final)){
+ if((discount>0||Number(data.cashback_used_tiyin||0)>0)&&(!previous||previous.signature!==signature||previous.discount!==discount||previous.final!==final||previous.cashback!==Number(data.cashback_used_tiyin||0))){
   document.getElementById('actDiscountQuote')?.scrollIntoView({behavior:'smooth',block:'center'});
   throw new Error('Обнаружена скидка клиента. Проверьте итог к оплате выше и нажмите «Создать акт» ещё раз.');
  }
@@ -982,65 +992,19 @@ async function showMasterPromos(){
         <p><b>Актов со скидкой:</b> ${masterEsc(st.applied_count||0)}</p>
         <p><b>Завершённых ремонтов:</b> ${masterEsc(st.completed_count||0)}</p>
         <p><b>Сумма скидок:</b> ${money(st.total_discount)}</p>
-        <p><b>Вознаграждение начислено:</b> ${money(st.total_reward)}</p>
-        <p><b>Выплачено:</b> ${money(st.paid_to_partner)}</p>
-        <p><b>К выплате:</b> ${money(st.balance_due)}</p>
-       </div></details>${Number(st.balance_due)>0 && p.advertiser_linked?`<button type="button" class="bt-payout-action" onclick="showMasterPayout('${masterEsc(p.code)}')">💳 Выплатить рекламодателю · ${money(st.balance_due)}</button>`:''}${!p.active&&p.awaiting_master_activation?`<button type="button" onclick="activateMasterPromo('${masterEsc(p.code)}')">✓ Активировать промокод</button>`:''}</article>`;
+        <p class="subtitle">Архивная статистика промокода. Финансовые начисления и выплаты учитываются администратором платформы.</p>
+        
+        
+       </div></details></article>`;
   }).join('');
-  masterShell('Промокоды',`<div class="bt-promo-actions"><button type="button" onclick="showCreateMasterPromo()">＋ Создать промокод</button></div><div class="stack-list">${rows||'<p class="bt-promo-empty">Промокодов пока нет.</p>'}</div>`);
+  masterShell('Промокоды',`<div class="bt-promo-actions"><p class="subtitle">Промокоды создаёт администратор платформы.</p></div><div class="stack-list">${rows||'<p class="bt-promo-empty">Промокодов пока нет.</p>'}</div>`);
 }
-let btMasterPayoutRequestId='';
-async function showMasterPayout(code){
- btMasterLastPayoutCode=code;
- try{await loadMasterData();}catch(e){return masterToast(e.message,true)}
- const promo=masterCache.promos.find(x=>x.code===code);
- if(!promo)return masterToast('Промокод не найден.',true);
- const balance=Math.max(0,Math.floor(Number(promo.stats?.balance_due||0)));
- if(!balance)return masterToast('Задолженности по этому промокоду нет.',true);
- btMasterPayoutRequestId=(typeof crypto!=='undefined'&&crypto.randomUUID)?crypto.randomUUID():`${Date.now()}-${Math.random().toString(16).slice(2).padEnd(24,'0')}`;
- masterShell('Выплата рекламодателю',`<article class="card"><h2>${masterEsc(code)}</h2>
-  <p><b>Рекламодатель:</b> ${masterEsc(promo.partner_name||'—')}</p>
-  <p><b>Карта:</b> ${promo.card_last4?'•••• '+masterEsc(promo.card_last4):'Уточните реквизиты'}</p>
-  <p><b>Задолженность:</b> ${new Intl.NumberFormat('ru-RU').format(balance)} сум</p>
-  <p class="subtitle">Переведите деньги рекламодателю через свой банк. ТехСервис не списывает деньги с карты.
-  После перевода укажите сумму и прикрепите скриншот/фото чека.</p>
-  <form class="bt-payout-row" onsubmit="event.preventDefault();submitMasterPayout('${masterEsc(code)}')">
-   <label>Сумма перевода, сум</label><input id="btPayoutAmount" required inputmode="numeric" pattern="[0-9 ]*" value="${balance}" data-max="${balance}">
-   <label>Чек перевода (JPG/PNG, до 4 МБ)</label><input type="file" id="btPayoutReceipt" required accept="image/jpeg,image/png">
-   <button type="submit" id="btPayoutSubmit">Подтвердить выплату с чеком</button>
-   <p id="btPayoutStatus" role="status" class="subtitle"></p>
-  </form><button class="back-btn" type="button" onclick="showMasterPromos()">← Промокоды</button></article>`);
-}
-async function submitMasterPayout(code){
- const btn=document.getElementById('btPayoutSubmit'),st=document.getElementById('btPayoutStatus');
- const amount=Number((document.getElementById('btPayoutAmount')?.value||'').replace(/\s/g,''));
- const maximum=Number(document.getElementById('btPayoutAmount')?.dataset?.max||0);
- const file=document.getElementById('btPayoutReceipt')?.files?.[0];
- if(!Number.isSafeInteger(amount)||amount<1||amount>maximum){st.textContent='Укажите сумму от 1 до остатка задолженности.';return;}
- if(!file||!['image/jpeg','image/png'].includes(file.type)||file.size>4*1024*1024){st.textContent='Прикрепите JPG или PNG до 4 МБ.';return;}
- if(!confirm(`Вы действительно перевели ${new Intl.NumberFormat('ru-RU').format(amount)} сум рекламодателю?`))return;
- btn.disabled=true;st.textContent='Загружаем чек в Telegram и сохраняем выплату…';st.className='subtitle';
- try{
-    const reader=new FileReader();const content=await new Promise((resolve,reject)=>{
-        reader.onload=()=>resolve(String(reader.result||'').split(',')[1]||'');
-        reader.onerror=()=>reject(new Error('Чек не удалось прочитать.'));
-        reader.readAsDataURL(file);
-    });
-    const res=await masterApi('/api/master/payout-with-receipt','POST',{
-        code,amount,mime_type:file.type,data:content,request_id:btMasterPayoutRequestId
-    });
-    st.textContent=res.message||'Выплата сохранена.';st.className='notice';
-    btn.textContent='✓ Выплата записана';
-    await loadMasterData();
- }catch(e){st.textContent=e.message;st.className='error';btn.disabled=false;}
-}
-async function activateMasterPromo(code){
- if(!confirm(`Активировать промокод ${code}? После активации только администратор сможет его отключить.`))return;
- try{const result=await masterApi(`/api/master/promos/${encodeURIComponent(code)}/activate`,'POST',{});masterToast(result.message||'Промокод активирован');await showMasterPromos();}
- catch(e){masterToast(e.message,true)}
-}
-function showCreateMasterPromo(){masterShell('Новый промокод',`<button class="back-btn" onclick="showMasterPromos()">← Назад</button><form class="card" onsubmit="event.preventDefault();submitMasterPromo()"><label>Код</label><input id="pCode" required maxlength="20" pattern="[A-Za-z0-9_-]{4,20}" placeholder="PARTNER10"><label>Имя партнёра</label><input id="pName" required maxlength="150"><label>Telegram партнёра</label><input id="pContact" required maxlength="150" placeholder="@username"><label>Телефон рекламодателя</label><input id="pPartnerPhone" required type="tel" placeholder="+998901234567"><label>Номер карты</label><input id="pCard" required inputmode="numeric" maxlength="23" placeholder="16–19 цифр"><label>Скидка клиенту, %</label><input id="pDiscount" required type="number" min="1" max="50" value="5"><label>Вознаграждение партнёру, %</label><input id="pReward" required type="number" min="0" max="30" value="5"><label>Использований на клиента</label><input id="pLimit" required type="number" min="1" max="100" value="1"><label>Действует до</label><input id="pExpiry" required type="date" value="${new Date(Date.now()+30*86400000).toISOString().slice(0,10)}"><button type="submit" id="promoSubmit">Создать промокод</button><p id="promoStatus" class="subtitle"></p></form>`);}
-async function submitMasterPromo(){const btn=document.getElementById('promoSubmit'),st=document.getElementById('promoStatus');btn.disabled=true;try{const r=await masterApi('/api/master/promo','POST',{code:document.getElementById('pCode').value.trim().toUpperCase(),partner_name:document.getElementById('pName').value.trim(),partner_contact:document.getElementById('pContact').value.trim(),partner_phone:document.getElementById('pPartnerPhone').value.trim(),partner_card:document.getElementById('pCard').value.replace(/\D/g,''),discount_percent:Number(document.getElementById('pDiscount').value),reward_percent:Number(document.getElementById('pReward').value),max_act:Number(document.getElementById('pLimit').value),expires_at:document.getElementById('pExpiry').value+'T23:59:59'});st.textContent=r.message;await showMasterPromos();}catch(e){st.textContent=e.message;st.className='error';btn.disabled=false;}}
+// Платформенные промокоды и выплаты доступны только администратору.
+function showMasterPayout(){masterToast('Выплаты рекламодателям доступны только администратору.',true)}
+function submitMasterPayout(){masterToast('Выплаты рекламодателям доступны только администратору.',true)}
+function activateMasterPromo(){masterToast('Активация промокодов доступна только администратору.',true)}
+function showCreateMasterPromo(){masterToast('Создание промокодов доступно только администратору.',true)}
+function submitMasterPromo(){masterToast('Создание промокодов доступно только администратору.',true)}
 async function showCreateAct(){if(!btLegalApproved){void btLegalGate(masterApi,showCreateAct,"master");return;}if(!(await btMasterCanOpenAct()))return;const accepted=masterCache.orders.find(o=>o.status==='accepted'&&!o.act_number);if(accepted)return showMasterCreateAct(accepted.id);return renderMasterActForm(null);}
 function showCreatePromoForm(){showCreateMasterPromo();}
 function sendEvent(){showAlert('Это действие теперь выполняется в мастерской панели. Выберите раздел в меню.');return false;}
@@ -1052,10 +1016,17 @@ async function showMasterProfile(){
   const localEnabled=r.master_enabled!==undefined?!!r.master_enabled:(r.enabled!==false);
   const adminEnabled=r.admin_enabled!==false;
   masterShell('Настройки профиля',`<style id="bt-master-profile-tweaks">.bt-identity-status{padding:9px 12px;border-radius:10px;border:1px solid #ef4444;box-shadow:0 0 12px rgba(255,38,55,.45);color:#ffb7bd;font-weight:700}.bt-identity-approved{border-color:#24d57b;box-shadow:0 0 12px rgba(26,220,105,.5);color:#baffd4}.bt-profile-form input:not([type=file]):not([type=checkbox]),.bt-profile-form textarea{border-color:#e64a5e;box-shadow:0 0 9px rgba(238,46,68,.3)}.bt-profile-form .bt-field-filled{border-color:#25c878!important;box-shadow:0 0 9px rgba(37,200,120,.28)!important}.bt-avatar-file-button{display:inline-flex;align-items:center;justify-content:center;padding:13px 18px;border:1px solid #36b8ff;border-radius:12px;background:linear-gradient(125deg,#167bca,#275fe0);color:#fff;font-weight:700;cursor:pointer;margin:8px 0}.bt-avatar-file-input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;overflow:hidden!important}.bt-avatar-file-button:focus-within{outline:2px solid #fff}.bt-client-repair{padding:12px 0;border-top:1px solid #31557d;line-height:1.65}.bt-promo-actions{margin:6px 0 18px}.bt-promo-actions button{width:auto;max-width:100%;padding:12px 18px}.bt-promo-empty{margin:0;padding:12px 4px;color:#a9bed9}</style><article class="card settings-intro"><h2>Профиль мастера</h2><p class="subtitle">Переключатели сохраняются сразу после нажатия. Остальные поля сохраняются кнопкой ниже.</p></article>
-  <article class="card bt-skills-card"><div class="bt-skills-heading"><div><h2>🔧 Специализации</h2><p class="subtitle" id="masterSkillsSummary">Загрузка…</p></div><button type="button" class="bt-skills-edit" id="btSkillsEdit" onclick="btToggleMasterSkills()" aria-expanded="false">Изменить</button></div><div id="masterSkillsEditor" hidden><div id="masterSkillsList"></div><div class="bt-skills-actions"><button type="button" onclick="btSaveMasterSkills()">Сохранить</button><button type="button" class="secondary" onclick="btCancelMasterSkills()">Отмена</button></div><p id="masterSkillsStatus" role="status"></p></div></article>
   <article class="card"><h2>🪪 Идентификация личности</h2><p id="identityStatus">Загрузка статуса…</p><button type="button" onclick="showMasterIdentity()">Пройти идентификацию</button></article>
   <form class="stack-list bt-profile-form" onsubmit="event.preventDefault();saveMasterSettings()">
   <article class="card"><label for="masterProfileName">Имя мастера</label><input id="masterProfileName" maxlength="100" required value="${masterEsc(p.name||'')}"><label for="masterProfilePhone">Телефон</label><input id="masterProfilePhone" maxlength="40" value="${masterEsc(p.phone||'')}" placeholder="+998…"><label for="masterAbout">О мастере (видно клиентам)</label><textarea id="masterAbout" maxlength="700" rows="4" placeholder="Опыт работы, специализация, подход к ремонту">${masterEsc(p.about||'')}</textarea><label for="masterAvatar">Фото профиля (видно клиентам)</label><div id="masterAvatarPreview">${p.avatar?`<img src="${masterEsc(p.avatar)}" alt="Фото мастера" style="width:96px;height:96px;border-radius:50%;object-fit:cover">`:''}</div><label for="masterAvatar" class="bt-avatar-file-button">📷 Выбрать фото профиля</label><input id="masterAvatar" class="bt-avatar-file-input" type="file" accept="image/jpeg,image/png,image/webp" onchange="btPreviewMasterAvatar(this)"><p id="btAvatarFileName" class="subtitle">JPG, PNG или WebP · до 4 МБ</p><button type="button" class="secondary" onclick="btClearMasterAvatar()">Удалить фото</button></article>
+  <article class="card"><h2>Специализации и территория</h2>
+  <p class="subtitle">Отмечайте услуги, которые оказываете. Изменение района — через администратора.</p>
+  <div id="btMasterSkills" class="stack-list"></div>
+  <p><b>Область:</b> ${masterEsc(p.service_region||'Не указана')}<br><b>Район:</b> ${masterEsc(p.service_district||'Не указан')}</p>
+  <label for="btMasterDiagnosticPrice">Выезд и диагностика, сум</label>
+  <input id="btMasterDiagnosticPrice" type="number" min="0" step="1000" value="${Number(p.diagnostic_price||0)}">
+  <p class="subtitle">Стоимость свыше 200 000 сум требует разрешения администратора.</p></article>
+  <article class="card"><h2>Акты по видам техники</h2><div id="btMasterActCategories"></div></article>
   <article class="card"><h2>🗺️ Навигатор</h2><p class="subtitle">Выберите, где открывать маршрут к клиенту. Настройка сохраняется на этом устройстве.</p>
   <label for="masterPreferredNavigator">Приложение для маршрутов</label>
   <select id="masterPreferredNavigator" onchange="masterSetPreferredNavigator(this.value)">
@@ -1072,7 +1043,44 @@ async function showMasterProfile(){
   <label>Вознаграждение пригласившему, %</label><input id="masterReferralReward" type="number" min="0" max="100" step="0.5" value="${Number(r.referrer_reward_percent??5)}">
   <label>Приглашений в одной партии</label><input id="masterReferralInvites" type="number" min="1" max="100" step="1" value="${Number(r.invites_per_batch??10)}">
   </article><article class="card"><button id="masterSettingsSave" type="submit">Сохранить остальные настройки</button><p id="masterSettingsStatus" class="subtitle" role="status"></p></article></form>
-  <button class="bt-master-support-entry" type="button" onclick="showMasterSupport()">💬 Написать в поддержку</button>`);masterIdentityStatus();btProfileMarkFields();btLoadMasterSkills();
+  <button class="bt-master-support-entry" type="button" onclick="btRequestTerritoryChange()">📍 Запросить смену района обслуживания</button>
+  <button class="bt-master-support-entry" type="button" onclick="showMasterSupport()">💬 Написать в поддержку</button>`);masterIdentityStatus();btProfileMarkFields();btMasterRenderServices(p);btMasterSyncCatalog().then(()=>btMasterRenderServices(p));
+}
+const BT_MASTER_SKILLS = {
+  'Бытовая техника': {washer:'Стиральные машины',fridge:'Холодильники',air_conditioner:'Кондиционеры',microwave:'Микроволновки',dishwasher:'Посудомойки',vacuum:'Пылесосы',ice_maker:'Льдогенераторы',water_heater:'Водонагреватели',tv_audio:'ТВ / аудио / тюнеры',other_appliance:'Прочее'},
+  'Компьютеры, периферия и ПО': {windows_install:'Установка Windows',desktop:'Настольные ПК',all_in_one:'Моноблоки',laptop:'Ноутбуки',printer:'Принтеры',scanner:'Сканеры'},
+  'Монтаж / демонтаж': {install_air_conditioner:'Кондиционер — Монтаж',remove_air_conditioner:'Кондиционер — Демонтаж',install_washer:'Стиральная машина — Монтаж',remove_washer:'Стиральная машина — Демонтаж',install_gas_stove:'Газовая плита — Монтаж',remove_gas_stove:'Газовая плита — Демонтаж',install_electric_stove:'Электрическая плита — Монтаж',remove_electric_stove:'Электрическая плита — Демонтаж',install_water_heater:'Водонагреватель — Монтаж',remove_water_heater:'Водонагреватель — Демонтаж',install_gas_boiler:'Газовый котёл — Монтаж',remove_gas_boiler:'Газовый котёл — Демонтаж'}
+};
+async function btMasterSyncCatalog(){try{const r=await masterApi('/api/map/areas');if(r&&r.skills&&typeof r.skills==='object'){for(const [group,skills] of Object.entries(r.skills))BT_MASTER_SKILLS[group]=skills;}}catch(e){/* Existing local catalog stays available offline */}}
+
+async function btRequestTerritoryChange(){
+ let regions;
+ try{const catalog=await masterApi('/api/map/areas');regions=catalog.regions||{}}catch(e){alert('Не удалось загрузить список районов: '+e.message);return}
+ const shade=document.createElement('div');shade.style.cssText='position:fixed;inset:0;background:#000a;z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+ const box=document.createElement('div');box.style.cssText='width:min(440px,100%);max-height:90vh;overflow:auto;padding:18px;border-radius:14px;background:#14253b;color:white;display:grid;gap:10px';
+ const title=document.createElement('strong');title.textContent='Запросить смену территории';box.append(title);
+ const region=document.createElement('select'),district=document.createElement('select'),reason=document.createElement('textarea');
+ for(const r of Object.keys(regions)){const o=document.createElement('option');o.value=r;o.textContent=r;region.append(o)}
+ const refresh=()=>{district.replaceChildren();for(const d of regions[region.value]||[]){const o=document.createElement('option');o.value=d;o.textContent=d;district.append(o)}};
+ region.addEventListener('change',refresh);refresh();reason.placeholder='Почему требуется изменить район?';reason.rows=3;
+ const submit=document.createElement('button');submit.type='button';submit.textContent='Направить администратору';
+ const close=document.createElement('button');close.type='button';close.textContent='Отмена';close.addEventListener('click',()=>shade.remove());
+ submit.addEventListener('click',async()=>{if(reason.value.trim().length<5){alert('Укажите причину длиной не менее 5 символов.');return}submit.disabled=true;try{await masterApi('/api/master/territory-request','POST',{service_region:region.value,service_district:district.value,reason:reason.value});shade.remove();alert('Заявка направлена администратору. До одобрения район не меняется.')}catch(e){alert(e.message);submit.disabled=false}});
+ const labels=['Область','Город / район','Причина'];for(const [i,element] of [region,district,reason].entries()){const label=document.createElement('label');label.textContent=labels[i];label.append(element);box.append(label)}box.append(submit,close);shade.append(box);document.body.append(shade);
+}
+function btMasterRenderServices(profile){
+ const holder=document.getElementById('btMasterSkills');if(!holder)return;
+ const selected=new Set(Array.isArray(profile.specializations)?profile.specializations:[]);
+ holder.innerHTML=Object.entries(BT_MASTER_SKILLS).map(([group,items])=>`<fieldset style="border:1px solid #31557d;border-radius:12px;padding:10px"><legend>${masterEsc(group)}</legend>${Object.entries(items).map(([code,label])=>`<label style="display:flex;align-items:center;gap:9px;padding:5px 0"><input type="checkbox" name="btMasterSkill" value="${code}" ${selected.has(code)?'checked':''}><span>${masterEsc(label)}</span></label>`).join('')}</fieldset>`).join('');
+ const target=document.getElementById('btMasterActCategories');if(!target)return;
+ const counts=new Map();const labels=Object.assign({},...Object.values(BT_MASTER_SKILLS));
+ for(const act of masterCache.acts||[]){
+  if(String(act.status||'').toLowerCase()==='cancelled')continue;
+  const code=String(act.service_skill||act.device_code||'');
+  if(!labels[code])continue; // Do not invent a category for historical acts.
+  counts.set(code,(counts.get(code)||0)+1);
+ }
+ target.innerHTML=counts.size?[...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([code,n])=>`<p>${masterEsc(labels[code])}: <b>${n}</b></p>`).join(''):'<p class="subtitle">Нет актов с достоверно указанной категорией.</p>';
 }
 function btProfileMarkFields(){
  const form=document.querySelector('.bt-profile-form');if(!form)return;
@@ -1138,12 +1146,13 @@ async function saveMasterSettings(){
   const btn=document.getElementById('masterSettingsSave'),st=document.getElementById('masterSettingsStatus');
   if(!btn||!st)return;
   btn.disabled=true;st.textContent='Сохраняем…';st.className='subtitle';
-  const data={name:document.getElementById('masterProfileName').value.trim(),phone:document.getElementById('masterProfilePhone').value.trim(),about:document.getElementById('masterAbout').value.trim(),referral_settings:{new_client_discount_percent:Number(document.getElementById('masterReferralDiscount').value),referrer_reward_percent:Number(document.getElementById('masterReferralReward').value),invites_per_batch:Number(document.getElementById('masterReferralInvites').value)}};
+  const data={specializations:[...document.querySelectorAll('input[name=btMasterSkill]:checked')].map(x=>x.value),diagnostic_price:Number(document.getElementById('btMasterDiagnosticPrice').value),name:document.getElementById('masterProfileName').value.trim(),phone:document.getElementById('masterProfilePhone').value.trim(),about:document.getElementById('masterAbout').value.trim(),referral_settings:{new_client_discount_percent:Number(document.getElementById('masterReferralDiscount').value),referrer_reward_percent:Number(document.getElementById('masterReferralReward').value),invites_per_batch:Number(document.getElementById('masterReferralInvites').value)}};
+  if(!data.specializations.length){st.textContent='Выберите хотя бы одну специализацию';st.className='error';btn.disabled=false;return;}
   try{
     if(window.btMasterAvatarDraft!==undefined)data.avatar=window.btMasterAvatarDraft;
     const r=await masterApi('/api/master/settings','POST',data);
     if(!masterCache.profile)masterCache.profile={};
-    masterCache.profile.name=data.name;masterCache.profile.phone=data.phone;masterCache.profile.about=data.about;if(data.avatar!==undefined){masterCache.profile.avatar=data.avatar;window.btMasterAvatarDraft=undefined;}
+    masterCache.profile.specializations=data.specializations;masterCache.profile.diagnostic_price=data.diagnostic_price;masterCache.profile.name=data.name;masterCache.profile.phone=data.phone;masterCache.profile.about=data.about;if(data.avatar!==undefined){masterCache.profile.avatar=data.avatar;window.btMasterAvatarDraft=undefined;}
     masterCache.profile.referral_settings={...(masterCache.profile.referral_settings||{}),...data.referral_settings};
     window.RemontMobile?.clearDirty();
     st.textContent=r.message||'Настройки сохранены';st.className='notice';
@@ -1421,57 +1430,3 @@ async function showMasterFinanceReport(){
 
 /* Required act choices: red neon until selected, green after completion. */
 (function(){const style=document.createElement('style');style.textContent=`.bt-master-picker.bt-act-required,.bt-act-required#actLocationButton{border:1px solid #ff4058!important;box-shadow:0 0 7px rgba(255,45,75,.65),0 0 16px rgba(255,45,75,.25)!important}.bt-master-picker.bt-act-complete,.bt-act-complete#actLocationButton{border:1px solid #29d986!important;box-shadow:0 0 7px rgba(41,217,134,.65),0 0 16px rgba(41,217,134,.22)!important}`;document.head.appendChild(style)})();
-
-const BT_MASTER_SKILLS = [
- ["Бытовая техника",[["washer","Стиральные машины"],["fridge","Холодильники"],["air_conditioner","Кондиционеры"],["microwave","Микроволновки"],["dishwasher","Посудомойки"],["vacuum","Пылесосы"],["ice_maker","Льдогенераторы"],["water_heater","Водонагреватели"],["tv_audio","ТВ / аудио / тюнеры"],["other_appliance","Прочее"]]],
- ["Компьютеры, периферия и ПО",[["windows_install","Установка Windows"],["desktop","Настольные ПК"],["all_in_one","Моноблоки"],["laptop","Ноутбуки"],["printer","Принтеры"],["scanner","Сканеры"]]],
- ["Монтаж / демонтаж",["air_conditioner","washer","gas_stove","electric_stove","water_heater","gas_boiler"].flatMap((x,i)=>[["install_"+x,["Кондиционер","Стиральная машина","Газовая плита","Электрическая плита","Водонагреватель","Газовый котёл"][i]+" — Монтаж"],["remove_"+x,["Кондиционер","Стиральная машина","Газовая плита","Электрическая плита","Водонагреватель","Газовый котёл"][i]+" — Демонтаж"]])]
-];
-/* Compact, accessible multi-select. Native global input styles do not affect chips. */
-(function(){
- const css=`.master-app .bt-skills-card{padding:14px!important}.bt-skills-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.bt-skills-heading h2{margin:0 0 4px}.bt-skills-heading .subtitle{margin:0;font-size:12px;line-height:1.4}.master-app button.bt-skills-edit{width:auto!important;min-width:88px!important;min-height:38px!important;padding:7px 12px!important;flex:none;font-size:13px!important}.bt-skills-card [hidden]{display:none!important}.bt-skills-section{margin-top:10px;border:1px solid #305475;border-radius:12px;overflow:hidden}.bt-skills-section summary{cursor:pointer;display:flex;align-items:center;gap:8px;padding:12px;font-weight:650;list-style:none;user-select:none}.bt-skills-section summary::-webkit-details-marker{display:none}.bt-skills-section summary:after{content:'⌄';margin-left:auto;font-size:18px;color:#8cc9ff}.bt-skills-section[open] summary:after{content:'⌃'}.bt-skills-count{font-size:11px;font-weight:600;color:#8cc9ff;white-space:nowrap}.bt-skills-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:0 9px 10px}.master-app button.bt-skill-chip{display:flex!important;align-items:center;justify-content:flex-start;text-align:left;gap:7px;width:100%!important;min-width:0!important;min-height:39px!important;padding:8px 9px!important;margin:0!important;border-radius:9px!important;background:#101f36!important;border:1px solid #355371!important;box-shadow:none!important;color:#cbd8e8!important;font-size:12px!important;font-weight:500!important;line-height:1.25!important;overflow-wrap:anywhere}.bt-skill-chip .bt-skill-check{width:16px;flex:0 0 16px;font-size:14px;color:#7b93a9}.master-app button.bt-skill-chip[aria-pressed=true]{background:#103959!important;border-color:#29aafa!important;color:white!important;box-shadow:inset 0 0 0 1px #2388c7!important}.bt-skill-chip[aria-pressed=true] .bt-skill-check{color:#54dca7}.bt-skills-actions{display:flex;gap:8px;margin-top:12px}.master-app .bt-skills-actions button{flex:1;min-width:0!important;padding:10px 6px!important;font-size:13px!important}.bt-skills-card button:focus-visible,.bt-skills-section summary:focus-visible{outline:2px solid #9ad6ff!important;outline-offset:2px}`;
- if(!document.getElementById('bt-skills-compact-style')){const el=document.createElement('style');el.id='bt-skills-compact-style';el.textContent=css;document.head.appendChild(el)}
-})();
-let btSkillsSelection=new Set();
-function btSkillCountText(n){return n+' '+(n%10===1&&n%100!==11?'услуга':n%10>=2&&n%10<=4&&(n%100<12||n%100>14)?'услуги':'услуг');}
-function btLoadMasterSkills(){
- const list=document.getElementById('masterSkillsList');if(!list)return;
- btSkillsSelection=new Set(Array.isArray(masterCache.profile?.specializations)?masterCache.profile.specializations:[]);
- btRenderMasterSkills();
-}
-function btRenderMasterSkills(){
- const list=document.getElementById('masterSkillsList');if(!list)return;
- list.innerHTML=BT_MASTER_SKILLS.map(([group,items],index)=>{
-  const count=items.filter(([code])=>btSkillsSelection.has(code)).length;
-  return '<details class="bt-skills-section" '+(index===0?'open':'')+'><summary>'+masterEsc(group)+' <span class="bt-skills-count" data-skills-group="'+index+'">'+count+'/'+items.length+'</span></summary><div class="bt-skills-grid">'+items.map(([code,label])=>'<button type="button" class="bt-skill-chip" aria-pressed="'+btSkillsSelection.has(code)+'" data-skill="'+code+'" onclick="btToggleMasterSkill(this)"><span class="bt-skill-check" aria-hidden="true">'+(btSkillsSelection.has(code)?'✓':'○')+'</span><span>'+masterEsc(label)+'</span></button>').join('')+'</div></details>';
- }).join('');
- btRefreshSkillsSummary();
-}
-function btRefreshSkillsSummary(){
- const summary=document.getElementById('masterSkillsSummary');
- if(summary)summary.textContent=btSkillsSelection.size?btSkillCountText(btSkillsSelection.size)+' выбрано':'Не выбрано ни одной услуги';
- document.querySelectorAll('[data-skills-group]').forEach(el=>{const i=Number(el.dataset.skillsGroup);const items=BT_MASTER_SKILLS[i]?.[1]||[];el.textContent=items.filter(([code])=>btSkillsSelection.has(code)).length+'/'+items.length});
-}
-function btToggleMasterSkill(button){
- const code=button.dataset.skill;if(!code)return;
- if(btSkillsSelection.has(code))btSkillsSelection.delete(code);else btSkillsSelection.add(code);
- const on=btSkillsSelection.has(code);button.setAttribute('aria-pressed',String(on));button.querySelector('.bt-skill-check').textContent=on?'✓':'○';btRefreshSkillsSummary();
-}
-function btToggleMasterSkills(){
- const editor=document.getElementById('masterSkillsEditor'),btn=document.getElementById('btSkillsEdit');if(!editor)return;
- editor.hidden=!editor.hidden;btn.setAttribute('aria-expanded',String(!editor.hidden));btn.textContent=editor.hidden?'Изменить':'Свернуть';
-}
-function btCancelMasterSkills(){btLoadMasterSkills();const editor=document.getElementById('masterSkillsEditor');if(editor&&!editor.hidden)btToggleMasterSkills();}
-async function btSaveMasterSkills(){
- const status=document.getElementById('masterSkillsStatus');
- const selected=[...btSkillsSelection];
- if(!selected.length){if(status)status.textContent='Выберите хотя бы одну услугу.';return;}
- const saveBtn=document.querySelector('.bt-skills-actions button');if(saveBtn)saveBtn.disabled=true;
- try{
-  await masterApi('/api/master/settings','POST',{specializations:selected});
-  if(!masterCache.profile)masterCache.profile={};masterCache.profile.specializations=selected;
-  if(status)status.textContent='Сохранено';
-  btToggleMasterSkills();masterToast('Специализации сохранены');
- }catch(e){if(status)status.textContent=e.message||'Не удалось сохранить.';}
- finally{if(saveBtn)saveBtn.disabled=false;}
-}
