@@ -1080,7 +1080,11 @@ function btMasterRenderServices(profile){
  .bt-skill-count{margin-left:auto;font-size:12px;opacity:.84;white-space:nowrap;font-weight:500}
  .bt-skill-options{padding:4px 12px 12px;border-top:1px solid #264362;display:grid;gap:3px}
  .bt-skill-option{display:flex;align-items:center;gap:10px;padding:9px 4px;cursor:pointer}
- .bt-skill-option input{flex:none;width:18px;height:18px;accent-color:#29a8fa}
+ .bt-skill-option input[type=checkbox]{appearance:auto!important;-webkit-appearance:checkbox!important;display:block!important;position:static!important;opacity:1!important;flex:0 0 18px!important;width:18px!important;min-width:18px!important;max-width:18px!important;height:18px!important;min-height:18px!important;max-height:18px!important;margin:0!important;padding:0!important;box-shadow:none!important;transform:none!important;accent-color:#29a8fa}
+ .bt-skill-option{min-height:38px!important}
+ .bt-skill-options{grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+ .bt-skill-option span{min-width:0;font-size:12px;line-height:1.3;overflow-wrap:anywhere}
+ @media(max-width:350px){.bt-skill-options{grid-template-columns:1fr}}
  </style>`+Object.entries(BT_MASTER_SKILLS).map(([group,items])=>{
    const chosen=Object.keys(items).filter(code=>selected.has(code)).length;
    return `<details class="bt-skill-group"><summary><span>${masterEsc(group)}</span><span class="bt-skill-count" aria-live="polite">${chosen} из ${Object.keys(items).length}</span></summary><div class="bt-skill-options">${Object.entries(items).map(([code,label])=>`<label class="bt-skill-option"><input type="checkbox" name="btMasterSkill" value="${masterEsc(code)}" ${selected.has(code)?'checked':''}><span>${masterEsc(label)}</span></label>`).join('')}</div></details>`;

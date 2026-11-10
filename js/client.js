@@ -2101,15 +2101,42 @@ async function btMasterLoadApplicationCatalog(){
     btMasterApplyDistricts();
     const root=document.getElementById('btMasterApplySkills');if(!root)return;
     root.replaceChildren();
+    // Scope all controls: global .master-auth-card input styles must not resize checkboxes.
+    if(!document.getElementById('bt-master-apply-compact-css')){
+      const style=document.createElement('style');style.id='bt-master-apply-compact-css';
+      style.textContent=`#btMasterApplySkills{display:grid;gap:10px;margin:12px 0}
+#btMasterApplySkills .bt-apply-group{border:1px solid #355779;border-radius:13px;background:#0d1e35;overflow:hidden;min-width:0}
+#btMasterApplySkills .bt-apply-group summary{display:flex;align-items:center;gap:8px;cursor:pointer;list-style:none;padding:12px;font-size:14px;font-weight:700}
+#btMasterApplySkills .bt-apply-group summary::-webkit-details-marker{display:none}
+#btMasterApplySkills .bt-apply-count{margin-left:auto;font-size:11px;font-weight:500;color:#91caff;white-space:nowrap}
+#btMasterApplySkills .bt-apply-group summary:after{content:'▾';color:#91caff}
+#btMasterApplySkills .bt-apply-group[open] summary:after{content:'▴'}
+#btMasterApplySkills .bt-apply-items{padding:0 10px 10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+#btMasterApplySkills .bt-apply-item{position:relative;display:flex!important;align-items:center!important;justify-content:flex-start;gap:6px;min-width:0;min-height:42px!important;margin:0!important;padding:8px!important;border:1px solid #355779;border-radius:9px;background:#10243f;cursor:pointer;font-size:12px;line-height:1.3;box-sizing:border-box}
+#btMasterApplySkills .bt-apply-item:has(input:checked){background:#133d5a;border-color:#17b9f2;box-shadow:inset 0 0 0 1px #17b9f2}
+#btMasterApplySkills input[type=checkbox]{appearance:auto!important;-webkit-appearance:checkbox!important;display:block!important;position:static!important;opacity:1!important;visibility:visible!important;flex:0 0 17px!important;width:17px!important;min-width:17px!important;max-width:17px!important;height:17px!important;min-height:17px!important;max-height:17px!important;padding:0!important;margin:0!important;border-radius:3px!important;accent-color:#16b9ff;box-shadow:none!important;transform:none!important}
+#btMasterApplySkills .bt-apply-item span{min-width:0;overflow-wrap:anywhere}
+@media(max-width:350px){#btMasterApplySkills .bt-apply-items{grid-template-columns:1fr}}
+`;
+      document.head.append(style);
+    }
     for(const [group,items] of Object.entries(catalog.skills||{})){
-      const section=document.createElement('fieldset');section.style.cssText='border:1px solid #49658a;border-radius:12px;padding:12px;margin:12px 0;min-width:0';
-      const legend=document.createElement('legend');legend.textContent=group;legend.style.fontWeight='700';section.append(legend);
-      for(const [code,label] of Object.entries(items)){
-        const line=document.createElement('label');line.style.cssText='display:flex;align-items:center;gap:10px;padding:7px 0;min-height:40px;cursor:pointer';
-        const input=document.createElement('input');input.type='checkbox';input.value=code;input.style.cssText='width:20px;height:20px;flex:0 0 20px;margin:0';
-        const span=document.createElement('span');span.textContent=label;line.append(input,span);section.append(line);
+      const values=Object.entries(items);
+      const section=document.createElement('details');section.className='bt-apply-group';
+      const heading=document.createElement('summary');
+      const title=document.createElement('span');title.textContent=group;
+      const counter=document.createElement('span');counter.className='bt-apply-count';
+      heading.append(title,counter);
+      const grid=document.createElement('div');grid.className='bt-apply-items';
+      for(const [code,label] of values){
+        const line=document.createElement('label');line.className='bt-apply-item';
+        const input=document.createElement('input');input.type='checkbox';input.value=code;
+        const span=document.createElement('span');span.textContent=label;
+        line.append(input,span);grid.append(line);
       }
-      root.append(section);
+      const update=()=>{const count=grid.querySelectorAll('input:checked').length;counter.textContent=count+' / '+values.length+' выбрано';};
+      grid.addEventListener('change',update);update();
+      section.append(heading,grid);root.append(section);
     }
   }catch(e){if(status){status.textContent='Не удалось загрузить справочник: '+e.message;status.className='error';}}
 }
