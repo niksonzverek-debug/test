@@ -76,7 +76,7 @@ function btStartClientPromoCarousel(generation){
     clientApi('/api/client/referral').then(r=>{
         if(generation!==btClientHomeGeneration||!banner.isConnected)return;
         if(r?.enabled&&r?.link){
-            slides.push({icon:'🎁',title:'Пригласи друга — получи скидку 5%!',detail:'Приглашайте друзей и получайте скидки',open:showClientReferral});
+            slides.push({icon:'🎁',title:'Пригласи друга — получи бонус!',detail:'За первый ремонт друга — бонус на баланс',open:showClientReferral});
             btClientPromoTimer=setInterval(()=>{
                 if(generation!==btClientHomeGeneration||!banner.isConnected){btStopClientPromoCarousel();return;}
                 current=(current+1)%slides.length;
@@ -142,7 +142,7 @@ function btRenderReferralPanel(box,r){
   const url=String(r?.link||'');
   if(!r?.enabled){box.hidden=true;box.replaceChildren();return;}
   box.hidden=false;
-  box.innerHTML=`<b>🎁 Пригласить друга</b><p>Друг получит скидку ${Number(r.new_client_discount_percent)||0}%, а вам начислится ${Number(r.referrer_reward_percent)||0}% после его первого завершённого ремонта.</p><p>Накопленных скидок: ${Number(r.discount_credits)||0}. Зарегистрировано по вашей ссылке: ${Number(r.invited_count)||0}. Осталось приглашений: ${Number(r.invites_remaining)||0}.</p>${url?`<input id="btReferralLink" readonly value="${escapeClient(url)}"><button type="button" onclick="btCopyReferralLink()">Копировать ссылку</button><button type="button" class="secondary" onclick="btShareReferralLink()">Поделиться</button>`:`<p class="subtitle">${escapeClient(r.message||'Новые приглашения пока недоступны.')}</p>`}`;
+  box.innerHTML=`<b>🎁 Пригласите друга</b><p>Ваш друг получит <b>${Number(r.new_client_discount_percent)||5}% скидки</b> на первый ремонт.</p><p>После завершения его ремонта Вы один раз получите <b>${Number(r.referrer_reward_percent)||1}% от стоимости</b> бонусом на баланс «ТехСервиса».</p><p>Бонусы можно использовать при следующем ремонте. Вывести деньгами нельзя.</p><p>Приглашённых друзей: ${Number(r.invited_count)||0}.</p>${url?`<input id="btReferralLink" readonly value="${escapeClient(url)}"><button type="button" onclick="btCopyReferralLink()">Копировать ссылку</button><button type="button" class="secondary" onclick="btShareReferralLink()">Поделиться</button>`:`<p class="subtitle">${escapeClient(r.message||'Новые приглашения пока недоступны.')}</p>`}`;
 }
 function btRefreshClientReviewsEntry(){
  const el=document.getElementById('btClientReviewsEntry');if(!el)return;
@@ -269,7 +269,7 @@ function showClientFAQ(){
       ['Где посмотреть выполненный ремонт?','Откройте «Мои акты». В электронном акте указаны выполненные работы, стоимость и условия гарантии.'],
       ['Что означает гарантия?','Срок и условия гарантии указаны в конкретном акте. Сохраняйте акт и обращайтесь к мастеру при вопросах по выполненному ремонту.'],
       ['Как работают промокоды?','В разделе «Промокоды» введите полученный код. Размер скидки, срок действия и ограничения зависят от условий промокода.'],
-      ['Как пригласить друга?','Поделитесь своей реферальной ссылкой, если она доступна в кабинете. Условия скидки зависят от завершения ремонта приглашённого клиента и действующих правил программы.'],
+      ['Как пригласить друга?','Поделитесь ссылкой: друг получит скидку 5% на первый ремонт, а Вы — 1% стоимости его первого завершённого ремонта бонусом на баланс ТехСервиса. Бонус можно потратить на будущий ремонт, вывести нельзя.'],
       ['Можно ли изменить мастера?','В настройках доступен запрос на смену мастера. Укажите причину; заявку рассмотрит администратор. До подтверждения текущий мастер не меняется.'],
       ['Что делать, если заявка отменена администратором?','Откройте историю заявок и посмотрите статус и причину. При необходимости создайте новую заявку или свяжитесь с поддержкой.'],
       ['Правовая информация и ответственность','ТехСервис предоставляет цифровую платформу, а ремонт, оплату, гарантии и налоговые обязательства мастер и клиент согласуют самостоятельно. Полные условия и политика конфиденциальности доступны в разделе «Правовая информация».'], ['Что делать, если приложение не обновилось?','Полностью закройте Mini App и откройте его снова из актуальной кнопки в Telegram. При повторной ошибке обратитесь в поддержку.']
@@ -1882,9 +1882,13 @@ async function submitOrder() {
                 +'&region='+encodeURIComponent(serviceRegion)+'&district='+encodeURIComponent(serviceDistrict)
                 +'&promo_code='+encodeURIComponent(data.promo_code || ''));
             const masters=matching.masters||[];
-            const selected=await btChooseMarketplaceMaster(masters);
+            const selected=await btChooseMarketplaceMaster(masters,matching.linked_deposit_limited_id||0);
             if(selected===null)return;
-            if(selected==='public'){
+            if(selected==='linked'){
+                data.master_search_mode='linked';
+                data.service_region=serviceRegion;
+                data.service_district=serviceDistrict;
+            }else if(selected==='public'){
                 data.marketplace_broadcast=true;
                 data.service_region=serviceRegion;
                 data.service_district=serviceDistrict;
@@ -2345,7 +2349,7 @@ function btCloseAddressMap(){
 }
 
 // Patch 06: choose an eligible master; broadcast will be enabled in patch 07.
-function btChooseMarketplaceMaster(masters){
+function btChooseMarketplaceMaster(masters,linkedDepositLimitedId=0){
   return new Promise(resolve=>{
     const shade=document.createElement('div');shade.className='bt-marketplace-shade';
     const panel=document.createElement('div');panel.className='bt-marketplace-panel bt-marketplace-panel-v13';
@@ -2364,6 +2368,13 @@ function btChooseMarketplaceMaster(masters){
       const ownWrap=document.createElement('div');ownWrap.className='bt-marketplace-top-actions';
       ownWrap.append(makeBtn('👨‍🔧 Вызвать моего мастера','bt-marketplace-wide-btn',()=>finish(own.master_id)));
       panel.append(ownWrap);
+    }
+    if(Number(linkedDepositLimitedId)>0){
+      const linkedWrap=document.createElement('div');linkedWrap.className='bt-marketplace-top-actions';
+      const note=document.createElement('p');note.className='subtitle';
+      note.textContent='Ваш прежний мастер временно не принимает новые заказы площадки. Личная заявка возможна, но акт станет доступен после пополнения его депозита.';
+      linkedWrap.append(note,makeBtn('👨‍🔧 Личная заявка моему мастеру','bt-marketplace-wide-btn',()=>finish('linked')));
+      panel.append(linkedWrap);
     }
     const list=document.createElement('div');list.className='bt-marketplace-list';
     const details=document.createElement('section');details.className='bt-marketplace-detail-view';details.hidden=true;
