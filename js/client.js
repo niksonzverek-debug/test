@@ -86,6 +86,19 @@ function btStartClientPromoCarousel(generation){
     }).catch(()=>{});
 }
 
+// Poll-only cache: share a short-lived dashboard response between the home chat,
+// home order status and the orders screen. POST/action requests never use this cache.
+let btDashboardPollCache={at:0,value:null,pending:null};
+function btInvalidateDashboardPoll(){btDashboardPollCache.at=0;btDashboardPollCache.value=null;}
+async function btPollClientDashboard(){
+    const cache=btDashboardPollCache;
+    if(cache.pending)return cache.pending;
+    if(cache.value && Date.now()-cache.at<8000)return cache.value;
+    cache.pending=clientApi('/api/client/dashboard').then(value=>{
+        cache.value=value;cache.at=Date.now();return value;
+    }).finally(()=>{cache.pending=null;});
+    return cache.pending;
+}
 let btOrderProgressTimer = null;
 function btStopOrderProgressRefresh() {
     if (btOrderProgressTimer) { clearInterval(btOrderProgressTimer); btOrderProgressTimer = null; }
@@ -246,15 +259,17 @@ function renderClientMenu() {
     // Home chat is functional, not a separate navigation screen.
     btRefreshClientChat(true);
     btChatAutoTimer=setInterval(()=>{
+        if(document.hidden)return;
         if(document.getElementById('btHomeChat'))btRefreshClientChat(true);
         else btStopChatRefresh();
-    },12000);
+    },20000);
     btHomeTimer=setInterval(()=>{
         if(!document.querySelector('.bt-client-home')){clearInterval(btHomeTimer);btHomeTimer=null;return;}
-        clientApi('/api/client/dashboard').then(d=>{
+        if(document.hidden)return;
+        btPollClientDashboard().then(d=>{
             btClientRecentOrder(d);
         }).catch(()=>{});
-    },20000);
+    },30000);
 }
 
 function showClientFAQ(){
@@ -728,6 +743,7 @@ async function clientApi(path, method='GET', body=null) {
     let data = {};
     try { data = await res.json(); } catch (_) {}
     if (!res.ok) { const err = new Error(data.error || `Ошибка запроса (${res.status})`); err.status = res.status; throw err; }
+    if(method.toUpperCase()!=='GET')btInvalidateDashboardPoll();
     return data;
 }
 
@@ -815,7 +831,7 @@ function btOrderCards(rows) {
 async function btRefreshOrderCards() {
     if (document.hidden || !document.getElementById('btOrdersList')) return;
     try {
-        const result=await clientApi('/api/client/dashboard');
+        const result=await btPollClientDashboard();
         const list=document.getElementById('btOrdersList');
         if(list){
             const wasActive=Boolean(list.querySelector('.bt-order-progress-card'));
@@ -878,7 +894,7 @@ async function confirmClientActRequest(orderId) {
         if (tg && typeof tg.showAlert === 'function') tg.showAlert(r.message || 'Заявка закрыта.');
         await showMyOrders();
     } catch (e) {
-        if (e.status===409) { await showMyOrders(); showAlert('Статус обновился. Заявка больше не требует подтверждения.'); }
+        if (e.status===409) { await showMyOrders(); showAlert(e.message || 'Не удалось подтвердить акт. Проверьте статус заявки.'); }
         else showAlert(e.message);
     }
 }
@@ -931,7 +947,9 @@ function showClientActPreview(number){
       <p><b>Выполненные работы:</b></p><ol>${works.map(w=>`<li>${escapeClient(typeof w==='string'?w:(w?.name||w?.title||'Работа'))}</li>`).join('')||'<li>Не указаны</li>'}</ol>
       <p><b>Стоимость ремонта:</b> ${escapeClient(btActMoney(act.price))}</p>
       ${Number(act.discount_amount||0)>0?`<p><b>Скидка:</b> −${escapeClient(btActMoney(act.discount_amount))}</p>`:''}
-      <p><b>Итого:</b> ${escapeClient(btActMoney(act.final_price??act.price))}</p>
+      <p><b>После скидки:</b> ${escapeClient(btActMoney(act.final_price??act.price))}</p>
+      ${Number(act.cashback_used_tiyin||0)>0?`<p><b>Списано кешбэком:</b> −${escapeClient(btActMoney(Number(act.cashback_used_tiyin)/100))}</p>`:''}
+      <p><b>К оплате клиентом:</b> ${escapeClient(btActMoney(act.client_due_sum??(Number(act.final_price??act.price)-Number(act.cashback_used_tiyin||0)/100)))}</p>
       <p><b>Гарантия:</b> ${escapeClient(act.guarantee_text||'—')} · до ${escapeClient(act.guarantee_until||'—')}</p>
       <p>${btWarrantyIndicator(act)}</p>
       ${act.paynet_url && !['paid','confirmed','confirmed_automatic','confirmed_auto','auto_confirmed'].includes(String(act.payment_status==='paid'?'paid':act.status||''))?`<a class="btn" href="${escapeClient(act.paynet_url)}" target="_blank" rel="noopener noreferrer">💳 Оплатить через Paynet</a><p class="subtitle">Оплата откроется в Paynet. После оплаты сообщите мастеру — автоматической проверки пока нет.</p>`:''}
@@ -1054,10 +1072,12 @@ function btChatBubble(m){
         (kind&&/^[a-f0-9]{32}$/.test(media)?`<div class="bt-chat-media-slot" data-media-id="${media}" data-media-kind="${kind}">Загружаем ${kind==='photo'?'фото':'видео'}…</div>`:'')+
         `<small>${escapeClient(String(m.created_at||'').replace('T',' ').slice(0,16))}</small></div>`;
 }
+let btClientChatInFlight=false;
 async function btRefreshClientChat(silent=false){
-    if(!document.getElementById('btChatHistory'))return;
+    if(!document.getElementById('btChatHistory')||btClientChatInFlight)return;
+    btClientChatInFlight=true;
     try{
-        const d=await clientApi('/api/client/dashboard');
+        const d=await btPollClientDashboard();
         const rows=Array.isArray(d.messages)?d.messages:[];
         const history=document.getElementById('btChatHistory');if(!history)return;
         const fingerprint=rows.map(m=>`${m.id}:${m.media_id||''}`).join('|');
@@ -1074,7 +1094,7 @@ async function btRefreshClientChat(silent=false){
         }
         const status=document.getElementById('messageStatus');
         if(status && !silent)status.textContent=e.message||'Не удалось загрузить чат.';
-    }
+    }finally{btClientChatInFlight=false;}
 }
 async function showMessages(){
     btStopChatRefresh();
@@ -1084,7 +1104,7 @@ async function showMessages(){
     <div class="bt-chat-compose-actions"><label class="bt-chat-attach" for="clientChatFile">＋ Фото / видео</label><input id="clientChatFile" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" onchange="btDescribeChatFile()" hidden><button id="clientChatSend" type="submit">➤ Отправить</button></div>
     <p id="clientChatFileName" class="subtitle"></p><p id="messageStatus" role="status" class="subtitle"></p></form></section>`);
     await btRefreshClientChat();
-    btChatAutoTimer=setInterval(()=>{if(document.getElementById('btChatHistory'))btRefreshClientChat(true);else btStopChatRefresh();},12000);
+    btChatAutoTimer=setInterval(()=>{if(document.hidden)return;if(document.getElementById('btChatHistory'))btRefreshClientChat(true);else btStopChatRefresh();},12000);
 }
 function btDescribeChatFile(){
     const file=document.getElementById('clientChatFile')?.files?.[0];
@@ -2480,3 +2500,12 @@ function btChooseMarketplaceMaster(masters,linkedDepositLimitedId=0){
     shade.append(panel);document.body.append(shade);
   });
 }
+
+// When Telegram Mini App resumes, refresh the visible view immediately.
+document.addEventListener('visibilitychange',()=>{
+    if(document.hidden)return;
+    btInvalidateDashboardPoll();
+    if(document.getElementById('btChatHistory'))btRefreshClientChat(true);
+    if(document.getElementById('btOrdersList'))btRefreshOrderCards();
+    if(document.querySelector('.bt-client-home'))btPollClientDashboard().then(d=>btClientRecentOrder(d)).catch(()=>{});
+});

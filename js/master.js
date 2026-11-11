@@ -372,7 +372,7 @@ function btStartMasterAttention(){
       }
     }catch(_){ /* no stale-UI overwrite during network failure */ }
     finally{btMasterAttentionInFlight=false;}
-  },12000);
+  },20000);
 }
 // All edge gestures and Telegram BackButton events are handled centrally.
 function btMasterRecentThreads(limit=3){
@@ -620,13 +620,16 @@ function btMasterRenderMessages(messages){
     h.querySelectorAll('[data-media-id]').forEach(btMasterDisplayMedia);
     h.scrollTop=h.scrollHeight;
 }
+let btMasterChatPollInFlight=false;
 async function btMasterRefreshOpenChat(){
-    if(!document.getElementById('btMasterChatHistory')||!activeChatClientId)return;
+    if(!document.getElementById('btMasterChatHistory')||!activeChatClientId||btMasterChatPollInFlight)return;
+    btMasterChatPollInFlight=true;
     try{
         const result=await masterApi('/api/master/messages?client_id='+encodeURIComponent(String(activeChatClientId)));
         masterCache.messages=Array.isArray(result.messages)?result.messages:[];
         btMasterRenderMessages(masterCache.messages.filter(m=>String(m.client_id)===String(activeChatClientId)));
     }catch(e){const status=document.getElementById('replyStatus');if(status)status.textContent=e.message;}
+    finally{btMasterChatPollInFlight=false;}
 }
 async function openMasterChat(clientId){
     btMasterStopChatMedia();activeChatClientId=String(clientId);
@@ -641,7 +644,7 @@ async function openMasterChat(clientId){
         <div class="bt-chat-compose-actions"><label class="bt-chat-attach" for="masterChatFile">＋ Фото / видео</label><input id="masterChatFile" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" hidden onchange="btMasterDescribeFile()"><button id="masterReplySend" type="submit">➤ Отправить</button></div><p id="btMasterFileName" class="subtitle"></p><p id="replyStatus" class="subtitle" role="status"></p></form>`);
     btMasterRenderMessages(masterCache.messages.filter(m=>String(m.client_id)===activeChatClientId));
     await btMasterRefreshOpenChat();
-    btMasterChatRefreshTimer=setInterval(()=>{if(document.getElementById('btMasterChatHistory'))btMasterRefreshOpenChat();else btMasterStopChatMedia();},12000);
+    btMasterChatRefreshTimer=setInterval(()=>{if(document.hidden)return;if(document.getElementById('btMasterChatHistory'))btMasterRefreshOpenChat();else btMasterStopChatMedia();},12000);
 }
 function btMasterDescribeFile(){
     const f=document.getElementById('masterChatFile')?.files?.[0];const e=document.getElementById('btMasterFileName');
@@ -1447,3 +1450,12 @@ async function showMasterFinanceReport(){
 
 /* Required act choices: red neon until selected, green after completion. */
 (function(){const style=document.createElement('style');style.textContent=`.bt-master-picker.bt-act-required,.bt-act-required#actLocationButton{border:1px solid #ff4058!important;box-shadow:0 0 7px rgba(255,45,75,.65),0 0 16px rgba(255,45,75,.25)!important}.bt-master-picker.bt-act-complete,.bt-act-complete#actLocationButton{border:1px solid #29d986!important;box-shadow:0 0 7px rgba(41,217,134,.65),0 0 16px rgba(41,217,134,.22)!important}`;document.head.appendChild(style)})();
+
+// Refresh focused master views immediately after returning to the Mini App.
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)return;
+  if(document.getElementById('btMasterChatHistory'))btMasterRefreshOpenChat();
+  if(btMasterCurrentScreen==='Панель мастера'||btMasterCurrentScreen==='Чаты'){
+    masterApi('/api/master/dashboard').then(d=>{masterCache.stats=d.stats||{};btUpdateMasterAttention();}).catch(()=>{});
+  }
+});
