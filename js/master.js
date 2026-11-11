@@ -1036,8 +1036,8 @@ async function showMasterProfile(){
   </select>
   <p id="masterNavigatorStatus" class="subtitle" role="status">${masterPreferredNavigator()?'Выбор сохранён. Маршрут будет открываться без дополнительного окна.':'При открытии маршрута будет предложен выбор навигатора.'}</p></article>
   <article class="card"><h2>🎟️ Заказы с промокодами</h2>
-  <label class="toggle-row bt-setting-toggle"><span>Принимать промозаказы со скидкой 10%</span><input id="masterAcceptPromoOrders" type="checkbox" ${p.accept_promo_orders===true?'checked':''} onchange="btSaveMasterPromoOptIn(this)"></label>
-  <p class="subtitle">Клиенту — скидка 10% на первый ремонт. Вы добровольно предоставляете 5%, остальные 5% компенсирует «ТехСервис». Ради новых клиентов платформа также оплачивает рекламу: по завершённому заказу с рекламодателем её расходы превышают доход на 3,25% стоимости ремонта. На обычных заказах ничего не меняется. Выключено — новые промозаказы не поступают.</p>
+  <label class="toggle-row bt-setting-toggle"><span>Принимать промозаказы</span><input id="masterAcceptPromoOrders" type="checkbox" ${p.accept_promo_orders===true?'checked':''} onchange="btSaveMasterPromoOptIn(this)"></label>
+  <p class="subtitle">Промокод может применить как новый, так и действующий клиент, если код активен и не исчерпаны лимиты. Мастер покрывает до 5% исходной стоимости, остальную скидку компенсирует платформа. Рекламодатель получает 3% исходной стоимости только по завершённому акту; активация кода не оплачивается. Выключено — новые промозаказы не поступают.</p>
   <p id="masterPromoOptInStatus" class="subtitle" role="status"></p></article>
   <article class="card"><h2>🎁 Реферальная программа</h2>
   <p class="subtitle">Ваши клиенты могут приглашать друзей по своей ссылке.</p>
