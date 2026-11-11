@@ -784,6 +784,7 @@ function btActiveOrders(rows) {
     return (Array.isArray(rows) ? rows : []).filter(o => {
         const status = String(o?.status || '').toLowerCase();
         const displayStatus = String(o?.display_status || '').toLowerCase();
+        if(status==='rejected' && o.response_timeout_pending)return true;
         return !inactive.has(status) && !inactive.has(displayStatus);
     });
 }
@@ -802,6 +803,11 @@ function btOrderCards(rows) {
             <p>${escapeClient(o.problem||'')}</p>${btOrderTimeline(o)}
             <p class="subtitle">Обновлено: ${escapeClient(date||'—')}</p>
             ${o.promocode?`<p>🎟️ Промокод: ${escapeClient(o.promocode)}</p>`:''}
+            ${['new','rejected'].includes(String(o.status)) && o.response_timeout_pending ? `<div class="bt-order-wait-choice">
+                <p><b>⏰ Мастер пока не принял заявку.</b> Вы можете подождать ещё 10 минут или выбрать другого мастера.</p>
+                <button type="button" onclick="btClientReassignOrder('${escapeClient(o.id)}')">🔎 Выбрать другого</button>
+                ${o.status==='new'?`<button type="button" class="secondary" onclick="btClientWaitOrder('${escapeClient(o.id)}')">⏳ Подождать 10 минут</button>`:''}
+            </div>` : ''}
             ${confirmationReady?`<button onclick="confirmClientAct('${escapeClient(o.id)}')">✅ Подтвердить выполнение</button>${deadline}`:''}
         </article>`;
     }).join('');
@@ -832,6 +838,29 @@ async function showMyOrders() {
         setPage('📋 Мои заявки', `${activeOrders.length ? `<div class="card"><b>Мастер: ${escapeClient(d.master?.name||'Не назначен')}</b> ${btMasterVerifiedBadge(d.master)}</div><p class="subtitle">Статусы обновляются автоматически каждые 20 секунд.</p>` : ''}<div id="btOrdersList">${btOrderCards(activeOrders)}</div>`);
         btOrderProgressTimer=setInterval(btRefreshOrderCards,20000);
     } catch (e) { setPage('📋 Мои заявки', `<div class="card error">${escapeClient(e.message)}</div>`); }
+}
+
+async function btClientWaitOrder(orderId){
+    try{
+        const r=await clientApi('/api/client/order/wait','POST',{order_id:String(orderId)});
+        showAlert(r.message||'Ожидаем ответа мастера ещё 10 минут.');
+        await showMyOrders();
+    }catch(e){showAlert(e.message||'Не удалось продлить ожидание.');}
+}
+async function btClientReassignOrder(orderId){
+    try{
+        const result=await clientApi('/api/client/order/reassign-options?order_id='+encodeURIComponent(orderId));
+        const masters=result.masters||[];
+        if(!masters.length){showAlert('Других подходящих мастеров сейчас нет. Вы можете подождать ещё 10 минут.');return;}
+        const selected=await btChooseMarketplaceMaster(masters);
+        if(selected===null || selected==='linked')return;
+        const mode=selected==='public'?'free':'selected';
+        const data={order_id:String(orderId),mode};
+        if(mode==='selected')data.master_id=Number(selected);
+        const done=await clientApi('/api/client/order/reassign','POST',data);
+        showAlert(done.message||'Заявка переназначена.');
+        await showMyOrders();
+    }catch(e){showAlert(e.message||'Не удалось выбрать другого мастера.');}
 }
 
 async function confirmClientAct(orderId) {
@@ -1993,6 +2022,12 @@ async function startRemontApp(){
           if (status) status.textContent = '📍 Геолокация из Telegram добавлена к заявке.';
           return;
         }
+      }
+      const reassign=String(clientUrlParams.get('reassign_order')||'');
+      if(/^ORD-[A-Z0-9]{10}$/.test(reassign)){
+        await showMyOrders();
+        void btClientReassignOrder(reassign);
+        return;
       }
       renderClientMenu();
       return;

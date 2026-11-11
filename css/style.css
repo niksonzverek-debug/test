@@ -1467,3 +1467,9 @@ body.bt-order-page .bt-map-open{margin-top:9px!important}
 .bt-profile-form .bt-skill-choice input[type=checkbox]{display:block!important;position:static!important;appearance:auto!important;-webkit-appearance:checkbox!important;width:20px!important;min-width:20px!important;max-width:20px!important;height:20px!important;min-height:20px!important;max-height:20px!important;flex:0 0 20px!important;margin:0!important;padding:0!important;box-shadow:none!important;accent-color:#3a9bff;opacity:1!important}
 .bt-skill-choice span{flex:1;min-width:0;overflow-wrap:anywhere;color:#e5efff;font-size:.96rem}
 @media(max-width:420px){.bt-skill-grid{grid-template-columns:minmax(0,1fr)}.bt-profile-form .bt-skill-choice{padding:9px 10px!important}}
+
+/* v19: client controls when the selected master has not replied. */
+.bt-order-wait-choice{margin-top:12px;padding:12px;border:1px solid #4884c9;border-radius:14px;background:rgba(22,65,116,.35)}
+.bt-order-wait-choice p{font-size:14px;line-height:1.45;margin:0 0 10px}
+.bt-order-wait-choice button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;width:100%;margin:0 0 8px;white-space:normal;font-size:14px}
+.bt-order-wait-choice button:last-child{margin-bottom:0}
