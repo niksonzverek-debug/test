@@ -1,2 +1,2 @@
 // Автоматически обновляется start_cloudflare_auto.py. Не редактируйте вручную.
-window.REMONT_ADVERTISER_API_BASE = "https://shaw-earthquake-instantly-wealth.trycloudflare.com";
+window.REMONT_ADVERTISER_API_BASE = "https://interference-struggle-weddings-directories.trycloudflare.com";
