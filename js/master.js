@@ -576,7 +576,7 @@ async function btSearchMasterClient(){
    const acts=masterCache.acts.filter(a=>btClientPhone(a.client_phone)===wanted&&a.status!=='cancelled');
    const client=masterCache.clients.find(c=>btClientPhone(c.phone)===wanted);
    if(!client&&!acts.length){out.innerHTML='<article class="card">Клиент с таким номером не найден.</article>';return;}
-   const rows=acts.map(a=>`<div class="bt-client-repair"><b>${masterEsc([a.device,a.brand,a.model].filter(Boolean).join(' ')||'Бытовая техника')}</b><div>Стоимость: ${masterEsc(fmtPrice(a.final_price??a.price??0))}</div><div>Дата ремонта: ${masterEsc(String(a.created_at||'').slice(0,10)||'—')}</div><div>Гарантия: ${masterEsc(btClientWarranty(a))}</div></div>`).join('');
+   const rows=acts.map(a=>`<div class="bt-client-repair"><b>${masterEsc([window.btTranslateText?.(a.device)||a.device,a.brand,a.model].filter(Boolean).join(' ')||'Бытовая техника')}</b><div>Стоимость: ${masterEsc(fmtPrice(a.final_price??a.price??0))}</div><div>Дата ремонта: ${masterEsc(String(a.created_at||'').slice(0,10)||'—')}</div><div>Гарантия: ${masterEsc(btClientWarranty(a))}</div></div>`).join('');
    out.innerHTML=`<article class="card bt-client-result"><h2>${masterEsc(client?.name||acts[0]?.client_name||'Клиент')}</h2><p><span>Номер:</span> ${masterEsc(client?.phone||input.value)}</p>${client?.public_name?`<p><span>Номер клиента:</span> ${masterEsc(client.public_name)}</p>`:''}${client?.registration_no?`<p>ID: ${masterEsc(client.registration_no)}</p>`:''}<p><span>Актов у данного мастера:</span> ${acts.length}</p>${rows||'<p class="subtitle">Ремонтов у этого мастера пока нет.</p>'}</article>`;
  }catch(e){out.innerHTML=`<article class="card error">${masterEsc(e.message)}</article>`;}
 }
@@ -701,7 +701,7 @@ async function showMasterActs(){
  clearMasterPdfUrl();
  const rows=masterCache.acts.filter(a=>a.status!=='cancelled').map(a=>`<article class="card bt-master-act-compact">
  <div class="card-row"><b>№ ${masterEsc(a.number)}</b><span class="status-pill">${masterEsc(masterActStatus(a.status))}</span></div>
- <div><b>${masterEsc(a.client_name||'Клиент')}</b> · ${masterEsc([a.device,a.brand].filter(Boolean).join(' '))}</div>
+ <div><b>${masterEsc(a.client_name||'Клиент')}</b> · ${masterEsc([window.btTranslateText?.(a.device)||a.device,a.brand].filter(Boolean).join(' '))}</div>
  <div class="subtitle"><b>${masterEsc(fmtPrice(a.final_price??a.price??0))}</b> · ${masterEsc(btMasterActPaymentLabel(a.payment_status))}</div>
  <button type="button" class="secondary" onclick="previewMasterAct('${masterEsc(a.number)}')">Подробнее ›</button></article>`);
  if(btActsObserver){btActsObserver.disconnect();btActsObserver=null;}
