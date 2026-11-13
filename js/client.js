@@ -19,7 +19,7 @@ async function btLegalGate(api, onSuccess, role){
 }
 function btLegalDialog(api,onSuccess,role,version){
   document.getElementById('btLegalOverlay')?.remove();
-  const uz=String(document.documentElement.lang||localStorage.getItem('remont_lang')||'ru').toLowerCase().startsWith('uz');
+  const uz=String(document.documentElement.lang||localStorage.getItem('remont_bt_lang')||localStorage.getItem('remont_lang')||'ru').toLowerCase().startsWith('uz');
   const div=document.createElement('div');div.id='btLegalOverlay';div.className='bt-legal-overlay';
   div.innerHTML=`<section class="bt-legal-dialog" role="dialog" aria-modal="true" aria-label="${uz?'Foydalanish shartlari':'Условия использования'}">
    <img class="bt-legal-logo" src="img/remont-bt-icon.png" alt="ТехСервис">
@@ -222,7 +222,6 @@ function renderClientMenu() {
           <div class="client-home-grid bt-home-tiles">
             <button class="menu-btn" onclick="showMyOrders()"><span class="emoji bt-line-icon">▤</span><b>Мои заявки</b><small>История</small></button>
             <button class="menu-btn" onclick="showMyActs()"><span class="emoji bt-line-icon">◫</span><b>Мои акты</b><small>Гарантия</small></button>
-            <button class="menu-btn" onclick="showEnterPromo()"><span class="emoji bt-line-icon">◇</span><b>Промокоды</b><small>Скидки</small></button>
             <button class="menu-btn bt-reviews-entry" id="btClientReviewsEntry" type="button" onclick="showClientMasterReviews()" hidden><span class="emoji bt-line-icon">☆</span><b>Мой мастер</b><small>Профиль и отзывы</small></button>
             <button class="menu-btn bt-referral-entry" id="btClientReferralEntry" type="button" onclick="showClientReferral()" hidden><span class="emoji bt-line-icon">↗</span><b>Пригласить друга</b><small>Рефералы</small></button>
             <button class="menu-btn" onclick="showProfile()"><span class="emoji bt-line-icon">◎</span><b>Профиль</b><small>Мои данные</small></button>
@@ -1473,7 +1472,7 @@ function showNewOrder() {
 
         <div class="card promo-card" id="orderPromoCard">
             <label>🎟️ Промокод</label>
-            <input id="order_promo_code" placeholder="Например, REMONT10" maxlength="64" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase">
+            <input id="order_promo_code" placeholder="Например, REMONT10" maxlength="64" autocapitalize="characters" autocomplete="off" style="text-transform:uppercase" oninput="this.dataset.btEdited='1'">
             <button type="button" id="orderPromoCheck" onclick="checkOrderPromo()">Проверить промокод</button>
             <p id="orderPromoStatus" class="subtitle">Активный промокод привяжется к вашему аккаунту автоматически при отправке заявки.</p>
         </div>
@@ -1515,6 +1514,14 @@ function showNewOrder() {
                     btStoreOrderTerritory(profile.service_region,profile.service_district);
             }
             if(profile.name)document.getElementById('client_name').value=profile.name;
+            // Only the server's registered-client promo is trusted, not a code cached from another user.
+            // Do not override a code the customer is actively editing.
+            const promoInput=document.getElementById('order_promo_code');
+            if(promoInput && !promoInput.value.trim() && !promoInput.dataset.btEdited && profile.promocode){
+                promoInput.value=String(profile.promocode).trim().toUpperCase();
+                promoInput.dataset.btAutofilled='1';
+                void checkOrderPromo();
+            }
             if(profile.name_confirmed){
                 identityCard.style.display='none';
                 localStorage.setItem('remont_bt_customer_name_confirmed','1');
@@ -1797,20 +1804,41 @@ async function checkOrderPromo() {
     const input = document.getElementById('order_promo_code');
     const status = document.getElementById('orderPromoStatus');
     const button = document.getElementById('orderPromoCheck');
+    const lang = window.currentMiniLang?.() || 'ru';
+    const tr = (ru, uz, en) => lang === 'uz' ? uz : lang === 'en' ? en : ru;
     const code = (input?.value || '').trim().toUpperCase();
-    if (!code) { if (status) { status.textContent = 'Введите промокод.'; status.className = 'subtitle error'; } return false; }
-    if (button) { button.disabled = true; button.textContent = 'Проверяем…'; }
+    if (!code) {
+        if (status) { status.textContent = tr('Введите промокод.','Promokodni kiriting.','Enter a promo code.'); status.className = 'subtitle error'; }
+        return false;
+    }
+    if (button) { button.disabled = true; button.textContent = tr('Проверяем…','Tekshirilmoqda…','Checking…'); }
     try {
         const r = await clientApi('/api/client/promo/check', 'POST', {code});
-        const timeLeft = r.expires_at ? (r.expires_in_hours >= 24 ? `Осталось ${Math.floor(r.expires_in_hours / 24)} дн. ${r.expires_in_hours % 24} ч.` : `Осталось ${r.expires_in_hours} ч.`) : 'Срок действия не ограничен';
-        const usesLeft = r.remaining_uses === null || r.remaining_uses === undefined ? 'Лимит: без персонального ограничения' : `Осталось использований для вас: ${r.remaining_uses}`;
-        if (status) { status.textContent = `✅ Скидка ${r.discount_percent}% · ${usesLeft} · ${timeLeft}. При отправке заявки код привяжется к аккаунту.`; status.className = 'notice'; }
+        const hours = Math.max(0, Number(r.expires_in_hours) || 0);
+        const timeLeft = r.expires_at
+          ? (hours >= 24
+              ? tr(`Осталось ${Math.floor(hours/24)} дн. ${hours%24} ч.`, `${Math.floor(hours/24)} kun ${hours%24} soat qoldi.`, `${Math.floor(hours/24)} days ${hours%24} hours left.`)
+              : tr(`Осталось ${hours} ч.`, `${hours} soat qoldi.`, `${hours} hours left.`))
+          : tr('Срок действия не ограничен','Amal qilish muddati cheklanmagan','No expiration date');
+        const usesLeft = (r.remaining_uses === null || r.remaining_uses === undefined)
+          ? tr('Лимит: без персонального ограничения','Limit: shaxsiy cheklovsiz','Limit: no individual restriction')
+          : tr(`Осталось использований для вас: ${r.remaining_uses}`, `Sizga ${r.remaining_uses} ta foydalanish qoldi`, `${r.remaining_uses} uses remaining for you`);
+        if (status) {
+            const discount = tr('Скидка','Chegirma','Discount');
+            const message = tr('При отправке заявки код привяжется к аккаунту.', 'Buyurtma yuborilganda kod hisobingizga biriktiriladi.', 'The code will be linked to your account when you submit the request.');
+            status.textContent = `✅ ${discount} ${r.discount_percent}% · ${usesLeft} · ${timeLeft}. ${message}`;
+            status.className = 'notice';
+        }
         return true;
     } catch (e) {
-        if (status) { status.textContent = e.message || 'Не удалось проверить промокод.'; status.className = 'subtitle error'; }
+        if (status) {
+            status.textContent = lang==='ru' ? (e.message || 'Не удалось проверить промокод.')
+                : tr('Не удалось проверить промокод.', 'Promokodni tekshirib boʻlmadi. Kod va amal qilish muddatini tekshiring.', 'Unable to verify the promo code. Check the code and its validity.');
+            status.className = 'subtitle error';
+        }
         return false;
     } finally {
-        if (button) { button.disabled = false; button.textContent = 'Проверить промокод'; }
+        if (button) { button.disabled = false; button.textContent = tr('Проверить промокод', 'Promokodni tekshirish', 'Check promo code'); }
     }
 }
 
@@ -2486,7 +2514,7 @@ function btChooseMarketplaceMaster(masters,linkedDepositLimitedId=0){
       const facts=document.createElement('div');facts.className='bt-marketplace-card-facts';
       const district=document.createElement('span');district.textContent='📍 '+String(m.district||'—');
       const experience=document.createElement('span');experience.textContent='🧾 '+Number(m.issued_acts||0)+' актов';
-      const price=document.createElement('span');price.textContent='💰 '+Number(m.diagnostic_price_uzs||0).toLocaleString('ru-RU')+' сум';
+      const price=document.createElement('span');const title=document.createElement('span');title.textContent='Выезд и диагностика:';price.append('💰 ',title,' '+Number(m.diagnostic_price_uzs||0).toLocaleString('ru-RU')+' сум');
       facts.append(district,experience,price);content.append(name,rating,facts);
       const select=makeBtn('Выбрать','bt-marketplace-card-select',()=>finish(m.master_id));
       card.append(avatar,content,select);list.append(card);
