@@ -229,7 +229,7 @@ function masterShell(title, body) {
      <div class="bt-header-copy"><span class="bt-header-hello">Здравствуйте!</span><strong class="bt-header-name">${masterEsc(name)}</strong></div>
      <span class="bt-header-role">🧰 <span>Мастер</span></span>
      ${home?`<button type="button" class="bt-master-deposit-link bt-header-deposit" onclick="showMasterFinance()" aria-label="Открыть мой депозит"><span>Мой депозит</span><strong id="btMasterHomeDepositValue">Загружаем…</strong><span aria-hidden="true">›</span></button>`:''}
-   </header><section id="masterContent">${home?'':`<h1 class="bt-screen-heading">${masterEsc(title)}</h1>`}${body}</section>
+   </header>${home?`<button type="button" id="btMasterHomeTrial" class="bt-master-deposit-link" style="display:none;margin:6px 12px;padding:8px 12px;width:calc(100% - 24px);justify-content:space-between;align-items:center;border:1px solid #3299ed;border-radius:10px;background:#103052;color:#e7f6ff" onclick="btMasterTrialInfo()"><span>Тестовый депозит</span><strong id="btMasterHomeTrialAmount"></strong><small id="btMasterHomeTrialDays"></small><span>ⓘ</span></button>`:''}<section id="masterContent">${home?'':`<h1 class="bt-screen-heading">${masterEsc(title)}</h1>`}${body}</section>
    <nav class="master-bottom-nav"><button onclick="renderMasterMenu()"><span>⌂</span><small>Главная</small></button><button id="btMasterOrdersNav" onclick="showMasterOrders()"><span>▤</span><small>Заказы</small></button><button id="btMasterChatsNav" onclick="showMasterMessages()"><span>✉</span><small>Чаты</small></button><button onclick="showMasterProfile()"><span>◎</span><small>Профиль</small></button></nav><p id="masterToast" class="subtitle" role="status"></p></main>`;
   // Reuse the existing language control; only move it into the master header.
   // ui-language.js recreates it after document.body.innerHTML is replaced.
@@ -300,6 +300,14 @@ async function loadMasterData() {
 }
 // Dashboard deposit is informational; issuance is also checked immediately before opening the form.
 let btMasterFinanceSnapshot = null;
+let btMasterTrialSnapshot = null;
+function btMasterTrialInfo(){
+ if(!btMasterTrialSnapshot)return;
+ const deadline=new Date(btMasterTrialSnapshot.expires_at).toLocaleDateString('ru-RU');
+ const message='Тестовый депозит — виртуальные средства, принадлежащие только платформе ТехСервис. Их нельзя вывести или обменять на реальные деньги. Комиссии за выданные акты списываются по стандартным правилам. Платформа не возмещает скидки и проценты за внутренние акции. Счёт действует до '+deadline+' или до полного расходования средств.';
+ if(typeof showAlert==='function')showAlert(message);else alert(message);
+}
+
 function btMasterDepositValue(d){
   if (!d || typeof d !== 'object') return null;
   const v = d.available_tiyin ?? d.balance_tiyin;
@@ -315,12 +323,22 @@ async function btMasterRefreshDeposit(){
   try{
     const d=await masterApi('/api/master/finance');
     btMasterFinanceSnapshot=btMasterDepositValue(d);
-  }catch(_){ btMasterFinanceSnapshot=null; }
+    btMasterTrialSnapshot=d.trial_deposit?.active?d.trial_deposit:null;
+  }catch(_){ btMasterFinanceSnapshot=null;btMasterTrialSnapshot=null; }
+  const trialRow=document.getElementById('btMasterHomeTrial');
+  if(trialRow){
+    trialRow.style.display=btMasterTrialSnapshot?'flex':'none';
+    if(btMasterTrialSnapshot){
+      document.getElementById('btMasterHomeTrialAmount').textContent=btMasterMoney(btMasterTrialSnapshot.balance_tiyin)+' сум';
+      const days=Math.ceil(btMasterTrialSnapshot.remaining_seconds/86400);
+      document.getElementById('btMasterHomeTrialDays').textContent=days+' дн.';
+    }
+  }
   const balance=document.getElementById('btMasterHomeDepositValue');
   if(balance) balance.textContent=btMasterFinanceSnapshot===null?'Баланс недоступен':btMasterMoney(btMasterFinanceSnapshot)+' сум';
   const button=document.getElementById('btMasterHomeCreateAct');
   if(button){
-    const locked=btMasterFinanceSnapshot!==null&&btMasterFinanceSnapshot<0;
+    const locked=!btMasterTrialSnapshot&&btMasterFinanceSnapshot!==null&&btMasterFinanceSnapshot<0;
     button.textContent=locked?'🔒 Создать акт':'＋ Создать акт';
     button.setAttribute('aria-label',locked?btMasterDepositShortage(btMasterFinanceSnapshot):'Создать акт');
   }
@@ -330,8 +348,9 @@ async function btMasterCanOpenAct(){
   try{
     const d=await masterApi('/api/master/finance');
     btMasterFinanceSnapshot=btMasterDepositValue(d);
-  }catch(_){btMasterFinanceSnapshot=null; /* Existing server-side issuance policy remains authoritative. */}
-  if(btMasterFinanceSnapshot!==null&&btMasterFinanceSnapshot<0){
+    btMasterTrialSnapshot=d.trial_deposit?.active?d.trial_deposit:null;
+  }catch(_){btMasterFinanceSnapshot=null;btMasterTrialSnapshot=null; /* Existing server-side issuance policy remains authoritative. */}
+  if(!btMasterTrialSnapshot&&btMasterFinanceSnapshot!==null&&btMasterFinanceSnapshot<0){
     const message=btMasterDepositShortage(btMasterFinanceSnapshot);
     masterToast(message,true);
     if(typeof showAlert==='function')showAlert(message);
