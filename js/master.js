@@ -89,20 +89,31 @@ const masterActStatusLabels={sending:'Отправляется',sent:'Отпра
 function masterActStatus(v){return masterActStatusLabels[v]||v||'Без статуса';}
 function masterActSummary(number){
  const act=masterCache.acts.find(a=>String(a.number)===String(number));
- if(!act)return '<p class="subtitle">Сведения об акте можно посмотреть в разделе «Все акты».</p>';
+ if(!act)return '<p class="subtitle">Акт не найден в списке. Вернитесь к актам и обновите данные.</p>';
  const works=Array.isArray(act.works)?act.works:[];
  const fmt=n=>new Intl.NumberFormat('ru-RU').format(Number(n||0));
- const money=fmt(act.final_price??act.price??0);
- return `<div class="bt-act-readable"><p><b>Клиент:</b> ${masterEsc(act.client_name||'—')}</p>
- <p><b>Телефон:</b> ${masterEsc(act.client_phone||'—')}</p><p><b>Техника:</b> ${masterEsc([act.device,act.brand,act.model].filter(Boolean).join(' '))}</p>
- <p><b>Выполненные работы:</b></p><ol>${works.map(w=>`<li>${masterEsc(w)}</li>`).join('')||'<li>Не указаны</li>'}</ol>
- <p><b>Стоимость ремонта:</b> ${masterEsc(fmt(act.price))} сум</p>
- ${Number(act.discount_amount||0)>0?`<p><b>Скидка:</b> −${masterEsc(fmt(act.discount_amount))} сум</p>`:''}
- <p><b>Стоимость после скидок:</b> ${masterEsc(money)} сум</p>
- ${Number(act.cashback_used_tiyin||0)>0?`<p><b>Списано кешбэком:</b> −${masterEsc(fmt(Number(act.cashback_used_tiyin)/100))} сум</p><p><b>Клиент оплатил:</b> ${masterEsc(fmt(act.client_due_sum))} сум</p><p><b>На депозит мастера:</b> +${masterEsc(fmt(Number(act.cashback_used_tiyin)/100))} сум</p>`:''}
- ${act.amounts_need_review?'<p class="error">Внимание: сумма старого акта требует сверки администратором.</p>':''}
- <p><b>Гарантия:</b> ${masterEsc(act.guarantee_text||'—')}</p>
- <p><b>Статус:</b> ${masterEsc(masterActStatus(act.status))}</p></div>`;
+ const finalPrice=fmt(act.final_price??act.price??0);
+ const device=[act.device,act.brand,act.model].filter(Boolean).join(' ')||'Не указана';
+ const amountAfterCashback=Number(act.cashback_used_tiyin||0)>0?Number(act.client_due_sum||0):null;
+ return `<div class="bt-act-compact-summary">
+   <div class="bt-act-compact-main"><span class="bt-act-device">${masterEsc(device)}</span><strong class="bt-act-amount">${masterEsc(amountAfterCashback===null?finalPrice:fmt(amountAfterCashback))} сум</strong></div>
+   <div class="bt-act-compact-meta">${masterEsc(act.client_name||'Клиент не указан')} · ${masterEsc(act.guarantee_text||'Без гарантии')}</div>
+   <div class="bt-act-compact-meta">${masterEsc(masterActStatus(act.status))}</div>
+   ${act.amounts_need_review?'<p class="error">Сумма акта требует проверки администратором.</p>':''}
+   <details class="bt-act-fold"><summary>Данные и выполненные работы</summary>
+      <div class="bt-act-fold-body"><p><b>Клиент:</b> ${masterEsc(act.client_name||'—')}</p>
+      <p><b>Телефон:</b> ${masterEsc(act.client_phone||'—')}</p>
+      <p><b>Техника:</b> ${masterEsc(device)}</p>
+      <p><b>Работы:</b></p>
+      <ol>${works.map(w=>`<li>${masterEsc(w)}</li>`).join('')||'<li>Не указаны</li>'}</ol>
+      <p><b>Стоимость:</b> ${masterEsc(fmt(act.price))} сум</p>
+      ${Number(act.discount_amount||0)>0?`<p><b>Скидка:</b> −${masterEsc(fmt(act.discount_amount))} сум</p>`:''}
+      <p><b>После скидок:</b> ${masterEsc(finalPrice)} сум</p>
+      ${amountAfterCashback!==null?`<p><b>Оплачено бонусами:</b> ${masterEsc(fmt(Number(act.cashback_used_tiyin)/100))} сум</p><p><b>Остаток к оплате:</b> ${masterEsc(fmt(act.client_due_sum))} сум</p>`:''}
+      <p><b>Гарантия:</b> ${masterEsc(act.guarantee_text||'—')}</p>
+      </div>
+   </details>
+ </div>`;
 }
 async function masterActPublicUrl(number,purpose='share-link'){
  const r=await masterApi(`/api/master/acts/${encodeURIComponent(String(number))}/${purpose}`,'POST',{});
@@ -167,26 +178,42 @@ async function btMasterUploadActQr(number){
 async function previewMasterAct(number){
  btMasterLastActNumber=number;
  clearMasterPdfUrl();
- masterShell('Просмотр акта',`<article class="card"><h2>Акт № ${masterEsc(number)}</h2>
- <p class="subtitle">Содержимое акта отображается сразу. PDF откроется в просмотрщике телефона или браузере.</p>
- ${masterActSummary(number)}<div class="card"><p><b>Оплата:</b> ${masterEsc(btMasterActPaymentLabel(masterCache.acts.find(a=>String(a.number)===String(number))?.payment_status))}</p>
- ${!['paid','unpaid'].includes(masterCache.acts.find(a=>String(a.number)===String(number))?.payment_status)?`<div class="button-row"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">✓ Оплачено</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Не оплачено</button></div>`:'<p class="subtitle">Ответ мастера зафиксирован и не подлежит изменению.</p>'}</div>
- <div class="card"><h3>🧾 QR-чек к акту</h3>
- ${masterCache.acts.find(a=>String(a.number)===String(number))?.receipt_qr
-  ?'<p class="subtitle">✓ QR-чек прикреплён. Можно загрузить другой чек вместо него.</p>'
-  :'<p class="subtitle">Акт выдан без QR-чека. Прикрепите его позже по желанию.</p>'}
- <label for="btActQrFile">Фото или PDF с QR-кодом (до 8 МБ)</label>
- <input type="file" id="btActQrFile" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf,.jpg,.jpeg,.png,.webp">
- <button type="button" id="btActQrSubmit" class="secondary" onclick="btMasterUploadActQr('${masterEsc(number)}')">${masterCache.acts.find(a=>String(a.number)===String(number))?.receipt_qr?'↻ Заменить QR-чек':'＋ Добавить QR-чек'}</button>
- <p id="btActQrStatus" class="subtitle" role="status"></p>
- <p class="subtitle">Чек сохраняется у выбранного акта. QR автоматически добавляется в PDF, но не подтверждает оплату.</p></div>
- <div class="button-row"><button type="button" onclick="openMasterActPdf('${masterEsc(number)}')">📄 Открыть PDF</button>
- <button type="button" class="secondary" onclick="downloadMasterAct('${masterEsc(number)}')">↓ Сохранить PDF</button></div>
- <div class="button-row"><button type="button" onclick="shareMasterAct('${masterEsc(number)}')">↗ Поделиться через Telegram</button>
- <button type="button" class="secondary" onclick="copyMasterActLink('${masterEsc(number)}')">🔗 Копировать ссылку</button></div>
- <p class="subtitle">Ссылка для передачи человеку без регистрации действительна 24 часа. Любой, кто получит ссылку, сможет прочитать этот акт.</p>
- <button type="button" class="secondary" onclick="showMasterActCorrection('${masterEsc(number)}')">✎ Заявка на исправление</button>
- <button type="button" class="back-btn" onclick="showMasterActs()">← Все акты</button></article>`);
+ const act=masterCache.acts.find(a=>String(a.number)===String(number));
+ const qrAttached=!!act?.receipt_qr;
+ const paymentStatus=act?.payment_status;
+ const paymentHtml=['paid','unpaid'].includes(paymentStatus)
+  ? `<span class="bt-act-pay-status">${masterEsc(btMasterActPaymentLabel(paymentStatus))}</span>`
+  : `<div class="bt-act-pay-controls"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">✓ Оплачено</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Не оплачено</button></div>`;
+ masterShell('Просмотр акта',`<article class="card bt-act-compact-page">
+  <h2>Акт № ${masterEsc(number)}</h2>
+  ${masterActSummary(number)}
+  <div class="bt-act-compact-payment"><b>Оплата:</b> ${paymentHtml}</div>
+  <div class="bt-act-compact-actions">
+   <button type="button" onclick="openMasterActPdf('${masterEsc(number)}')">📄 Открыть PDF</button>
+   <button type="button" class="secondary" onclick="downloadMasterAct('${masterEsc(number)}')">↓ Скачать</button>
+  </div>
+  <details class="bt-act-fold bt-act-qr-fold">
+   <summary>🧾 QR-чек <span class="bt-act-qr-label">${qrAttached?'✓ прикреплён':'не прикреплён'}</span></summary>
+   <div class="bt-act-fold-body">
+     <label for="btActQrFile">Загрузите фото или PDF с QR-кодом (до 8 МБ)</label>
+     <input type="file" id="btActQrFile" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf,.jpg,.jpeg,.png,.webp">
+     <button type="button" id="btActQrSubmit" class="secondary" onclick="btMasterUploadActQr('${masterEsc(number)}')">${qrAttached?'↻ Заменить QR-чек':'＋ Прикрепить QR-чек'}</button>
+     <p id="btActQrStatus" class="bt-act-help" role="status"></p>
+     <small class="bt-act-help">QR появится в PDF-акте. Это не подтверждает оплату.</small>
+   </div>
+  </details>
+  <details class="bt-act-fold bt-act-more-actions"><summary>⋯ Дополнительные действия</summary>
+   <div class="bt-act-fold-body">
+    <div class="bt-act-compact-actions">
+     <button type="button" onclick="shareMasterAct('${masterEsc(number)}')">↗ В Telegram</button>
+     <button type="button" class="secondary" onclick="copyMasterActLink('${masterEsc(number)}')">🔗 Ссылка</button>
+    </div>
+    <small class="bt-act-help">Ссылка на акт действует 24 часа и доступна её получателю.</small>
+    <button type="button" class="secondary" onclick="showMasterActCorrection('${masterEsc(number)}')">✎ Запросить исправление</button>
+   </div>
+  </details>
+  <button type="button" class="back-btn" onclick="showMasterActs()">← Все акты</button>
+ </article>`);
 }
 async function copyMasterActLink(number){
  try{

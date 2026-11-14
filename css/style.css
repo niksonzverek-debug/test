@@ -1476,3 +1476,34 @@ body.bt-order-page .bt-map-open{margin-top:9px!important}
 
 /* Patch 2026-11-13: independent Paynet payment action in the act list. */
 .bt-client-act-card{margin-bottom:12px}.bt-client-act-card .bt-client-payment-link{display:block;margin:8px 0 4px;text-align:center;text-decoration:none}.bt-client-act-card .subtitle{margin:4px 0 10px;font-size:.85rem}.bt-order-progress-card>.bt-client-payment-link{display:block;margin:8px 0;text-align:center;text-decoration:none}.bt-order-problem{border-left:3px solid #3badea;padding:6px 10px;line-height:1.45;color:#def2ff}
+
+/* Compact issued-act view: details and optional tools remain on demand. */
+.master-app .bt-act-compact-page{padding:13px 12px!important;margin-bottom:12px!important}
+.master-app .bt-act-compact-page>h2{font-size:17px;margin:3px 0 10px;overflow-wrap:anywhere}
+.bt-act-compact-summary{background:#102842;border:1px solid #2a689b;border-radius:12px;padding:12px;margin:8px 0}
+.bt-act-compact-main{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.bt-act-device{color:#f1f7ff;font-weight:700;flex:1 1 140px}
+.bt-act-amount{font-size:17px;white-space:nowrap;color:#9fdcff}
+.bt-act-compact-meta{font-size:12px;color:#a9bfdb;margin-top:4px}
+.bt-act-compact-payment{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:9px;padding:8px 0;margin:6px 0;border-top:1px solid #24496f}
+.bt-act-compact-payment>b{font-size:13px}
+.bt-act-pay-status{font-size:13px;color:#bfe7ff;font-weight:650}
+.bt-act-pay-controls{display:flex;flex-wrap:wrap;gap:6px}
+.master-app .bt-act-pay-controls button{min-height:34px!important;padding:7px 9px!important;font-size:12px!important;width:auto!important}
+.bt-act-compact-actions{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:7px;margin:8px 0 12px}
+.master-app .bt-act-compact-actions button{min-width:0;min-height:39px!important;padding:9px 5px!important;font-size:13px!important;margin:0!important}
+.bt-act-fold{border:1px solid #275e89;border-radius:11px;margin:9px 0;background:rgba(8,26,48,.7);overflow:hidden}
+.bt-act-fold>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 12px;color:#bce5ff;font-size:13px;font-weight:700}
+.bt-act-fold>summary::-webkit-details-marker{display:none}
+.bt-act-fold>summary:after{content:'⌄';font-size:15px;color:#8ab5da}
+.bt-act-fold[open]>summary:after{content:'⌃'}
+.bt-act-fold[open]>summary{border-bottom:1px solid #265175}
+.bt-act-fold-body{padding:11px 12px;font-size:13px;line-height:1.45;color:#d8eafa}
+.bt-act-fold-body p{margin:6px 0!important;line-height:1.45!important}
+.bt-act-fold-body ol{padding-left:20px;margin:5px 0 8px}
+.bt-act-fold-body input[type=file]{width:100%;max-width:100%;font-size:12px;border:1px solid #355b82;border-radius:8px;padding:8px;margin:7px 0;background:#0b1828;color:#d8eafa}
+.master-app .bt-act-fold-body>button{font-size:13px;min-height:39px!important;padding:9px 10px!important;margin:5px 0!important}
+.bt-act-fold-body .bt-act-help{font-size:11px;color:#9cb4cb;line-height:1.35;display:block;margin:6px 0;overflow-wrap:anywhere}
+.bt-act-qr-label{font-size:11px;color:#8fbeed;margin-left:auto;font-weight:500}
+.master-app .bt-act-compact-page>.back-btn{font-size:13px;min-height:38px!important;margin:12px 0 0!important;padding:8px 13px!important}
+@media(max-width:360px){.bt-act-compact-actions{grid-template-columns:1fr}.bt-act-compact-main{gap:4px}}
