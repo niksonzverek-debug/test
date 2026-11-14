@@ -1473,3 +1473,6 @@ body.bt-order-page .bt-map-open{margin-top:9px!important}
 .bt-order-wait-choice p{font-size:14px;line-height:1.45;margin:0 0 10px}
 .bt-order-wait-choice button{display:inline-flex;align-items:center;justify-content:center;min-height:40px;width:100%;margin:0 0 8px;white-space:normal;font-size:14px}
 .bt-order-wait-choice button:last-child{margin-bottom:0}
+
+/* Patch 2026-11-13: independent Paynet payment action in the act list. */
+.bt-client-act-card{margin-bottom:12px}.bt-client-act-card .bt-client-payment-link{display:block;margin:8px 0 4px;text-align:center;text-decoration:none}.bt-client-act-card .subtitle{margin:4px 0 10px;font-size:.85rem}.bt-order-progress-card>.bt-client-payment-link{display:block;margin:8px 0;text-align:center;text-decoration:none}.bt-order-problem{border-left:3px solid #3badea;padding:6px 10px;line-height:1.45;color:#def2ff}

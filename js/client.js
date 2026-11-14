@@ -818,6 +818,7 @@ function btOrderCards(rows) {
             <p>${escapeClient(o.problem||'')}</p>${btOrderTimeline(o)}
             <p class="subtitle">Обновлено: ${escapeClient(date||'—')}</p>
             ${o.promocode?`<p>🎟️ Промокод: ${escapeClient(o.promocode)}</p>`:''}
+            ${btClientPaymentButton(o)}
             ${['new','rejected'].includes(String(o.status)) && o.response_timeout_pending ? `<div class="bt-order-wait-choice">
                 <p><b>⏰ Мастер пока не принял заявку.</b> Вы можете подождать ещё 10 минут или выбрать другого мастера.</p>
                 <button type="button" onclick="btClientReassignOrder('${escapeClient(o.id)}')">🔎 Выбрать другого</button>
@@ -898,6 +899,23 @@ async function confirmClientActRequest(orderId) {
     }
 }
 
+// Paynet is an external payment page, not proof of payment. Never infer
+// payment_status from act confirmation or from opening this link.
+function btClientPaynetUrl(record){
+    if(!record || String(record.payment_status||'').toLowerCase()==='paid')return '';
+    try{
+        const u=new URL(String(record.paynet_url||''));
+        if(u.protocol!=='https:'||!['app.paynet.uz','paynet.uz'].includes(u.hostname.toLowerCase())||u.username||u.password)return '';
+        return u.href;
+    }catch(_){return '';}
+}
+function btClientPaymentButton(record){
+    const url=btClientPaynetUrl(record);
+    if(!url)return '';
+    const amount=Number(record.payment_due_sum??record.client_due_sum??record.final_price??record.price??0);
+    return `<a class="btn bt-client-payment-link" href="${escapeClient(url)}" target="_blank" rel="noopener noreferrer">💳 Оплатить ремонт${amount>0?' — '+escapeClient(btActMoney(amount)):''}</a><p class="subtitle">Откроется Paynet Xolis. Переход по ссылке не означает подтверждение оплаты.</p>`;
+}
+
 let btClientActsCache=[];
 const btActMoney=value=>new Intl.NumberFormat('ru-RU').format(Number(value||0))+' сум';
 function btClientActStatus(status){
@@ -920,12 +938,12 @@ async function showMyActs() {
     try {
         const d=await clientApi('/api/client/dashboard');
         btClientActsCache=(d.acts||[]).filter(a=>a.status!=='cancelled');
-        const content=btClientActsCache.length?btClientActsCache.map((a,index)=>`<button type="button" class="bt-client-act-compact" onclick="showClientActPreviewByIndex(${index})" aria-label="Подробности акта ${escapeClient(a.number||'')}">
+        const content=btClientActsCache.length?btClientActsCache.map((a,index)=>`<div class="bt-client-act-card"><button type="button" class="bt-client-act-compact" onclick="showClientActPreviewByIndex(${index})" aria-label="Подробности акта ${escapeClient(a.number||'')}">
           <span class="bt-client-act-head"><strong>Акт № ${escapeClient(a.number||'—')}</strong><span class="bt-client-act-chevron">›</span></span>
           <span class="bt-client-act-device">${escapeClient(btClientActTitle(a))}</span>
           <span class="bt-client-act-meta"><strong>${escapeClient(btActMoney(a.final_price??a.price))}</strong><span>${btWarrantyIndicator(a)}</span></span>
           <span class="bt-client-act-status">${escapeClient(btClientActStatus(a.status))}</span>
-        </button>`).join(''):'<div class="card">Актов пока нет.</div>';
+        </button>${btClientPaymentButton(a)}</div>`).join(''):'<div class="card">Актов пока нет.</div>';
         setPage('📄 Акты и документы',`<div class="bt-client-act-list">${content}</div>`);
     } catch(e){setPage('📄 Акты и документы',`<div class="card error">${escapeClient(e.message)}</div>`);}
 }
@@ -951,7 +969,7 @@ function showClientActPreview(number){
       <p><b>К оплате клиентом:</b> ${escapeClient(btActMoney(act.client_due_sum??(Number(act.final_price??act.price)-Number(act.cashback_used_tiyin||0)/100)))}</p>
       <p><b>Гарантия:</b> ${escapeClient(act.guarantee_text||'—')} · до ${escapeClient(act.guarantee_until||'—')}</p>
       <p>${btWarrantyIndicator(act)}</p>
-      ${act.paynet_url && !['paid','confirmed','confirmed_automatic','confirmed_auto','auto_confirmed'].includes(String(act.payment_status==='paid'?'paid':act.status||''))?`<a class="btn" href="${escapeClient(act.paynet_url)}" target="_blank" rel="noopener noreferrer">💳 Оплатить через Paynet</a><p class="subtitle">Оплата откроется в Paynet. После оплаты сообщите мастеру — автоматической проверки пока нет.</p>`:''}
+      ${btClientPaymentButton(act)}
       <button type="button" onclick="openClientActPdf('${escapeClient(number)}')">📄 Открыть PDF</button>
       <button type="button" class="secondary" onclick="downloadClientActPdf('${escapeClient(number)}')">↓ Сохранить PDF</button>
       <button type="button" class="back-btn" onclick="showMyActs()">← Все акты</button></article>`);
