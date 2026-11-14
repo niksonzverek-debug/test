@@ -35,7 +35,7 @@ window.WEBAPP_SENDDATA_SUPPORTED = launchMode === 'keyboard';
 <script src="js/advertiser-config.js?v=20261021-p15-reviews-referral"></script>
 <script src="js/common.js?v=20261021-fullscreen-v1"></script>
 <script src="js/mobile-shell.js?v=20261021-fullscreen-v1"></script>
-<script src="js/ui-language.js?v=20261113-combined-fixes1"></script>
+<script src="js/ui-language.js?v=20261114-qr-receipt1"></script>
 <script>
 (async function bootRemontBT(){
   const area = document.getElementById('btEntry');
@@ -63,7 +63,7 @@ window.WEBAPP_SENDDATA_SUPPORTED = launchMode === 'keyboard';
     }
     // Existing applications are loaded only after server-side role discovery.
     const script=document.createElement('script');
-    script.src=role==='master'?'js/master.js?v=20261113-combined-fixes1':'js/client.js?v=20261113-combined-fixes1';
+    script.src=role==='master'?'js/master.js?v=20261114-qr-receipt1':'js/client.js?v=20261113-combined-fixes1';
     script.onerror=()=>show('Не удалось открыть кабинет','Не удалось загрузить файлы приложения. Проверьте публикацию GitHub Pages.',[{text:'Повторить',run:()=>location.reload()}]);
     // Remove the loader so existing client/master scripts own the body.
     area.remove(); document.body.appendChild(script);

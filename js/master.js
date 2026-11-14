@@ -137,6 +137,33 @@ function btMasterAskPayment(number){
  <div class="button-row"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">Да, оплатил</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Нет, ещё не оплатил</button></div>
  <button type="button" class="back-btn" onclick="showMasterActs()">Ответить позже</button></article>`);
 }
+async function btMasterUploadActQr(number){
+ const input=document.getElementById('btActQrFile');
+ const button=document.getElementById('btActQrSubmit');
+ const status=document.getElementById('btActQrStatus');
+ const file=input?.files?.[0];
+ if(!file){if(status)status.textContent='Выберите фото или PDF-чек.';return;}
+ const formats=new Set(['image/jpeg','image/png','image/webp','application/pdf']);
+ if(!formats.has(file.type)||file.size>8*1024*1024||!file.size){
+  if(status)status.textContent='Разрешены JPG, PNG, WebP и PDF до 8 МБ.';return;
+ }
+ const previous=masterCache.acts.find(a=>String(a.number)===String(number))?.receipt_qr;
+ if(previous && !window.confirm('Заменить ранее прикреплённый QR-чек новым?'))return;
+ if(button)button.disabled=true;
+ if(status)status.textContent='Ищем QR-код и обновляем PDF…';
+ try{
+  const encoded=await new Promise((resolve,reject)=>{
+    const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Не удалось прочитать файл.'));reader.readAsDataURL(file);
+  });
+  const result=await masterApi(`/api/master/acts/${encodeURIComponent(String(number))}/attach-qr-receipt`,'POST',{
+    data:encoded,media_type:file.type,file_name:file.name,replace:!!previous
+  });
+  masterToast(result.message||'QR-чек прикреплён к акту.');
+  await loadMasterData();
+  previewMasterAct(number);
+ }catch(e){if(status)status.textContent=e.message||'Не удалось прикрепить чек.';masterToast(e.message||'Ошибка загрузки QR-чека',true)}
+ finally{if(button)button.disabled=false;}
+}
 async function previewMasterAct(number){
  btMasterLastActNumber=number;
  clearMasterPdfUrl();
@@ -144,6 +171,15 @@ async function previewMasterAct(number){
  <p class="subtitle">Содержимое акта отображается сразу. PDF откроется в просмотрщике телефона или браузере.</p>
  ${masterActSummary(number)}<div class="card"><p><b>Оплата:</b> ${masterEsc(btMasterActPaymentLabel(masterCache.acts.find(a=>String(a.number)===String(number))?.payment_status))}</p>
  ${!['paid','unpaid'].includes(masterCache.acts.find(a=>String(a.number)===String(number))?.payment_status)?`<div class="button-row"><button type="button" onclick="btMasterSaveActPayment('${masterEsc(number)}','paid')">✓ Оплачено</button><button type="button" class="secondary" onclick="btMasterSaveActPayment('${masterEsc(number)}','unpaid')">Не оплачено</button></div>`:'<p class="subtitle">Ответ мастера зафиксирован и не подлежит изменению.</p>'}</div>
+ <div class="card"><h3>🧾 QR-чек к акту</h3>
+ ${masterCache.acts.find(a=>String(a.number)===String(number))?.receipt_qr
+  ?'<p class="subtitle">✓ QR-чек прикреплён. Можно загрузить другой чек вместо него.</p>'
+  :'<p class="subtitle">Акт выдан без QR-чека. Прикрепите его позже по желанию.</p>'}
+ <label for="btActQrFile">Фото или PDF с QR-кодом (до 8 МБ)</label>
+ <input type="file" id="btActQrFile" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf,.jpg,.jpeg,.png,.webp">
+ <button type="button" id="btActQrSubmit" class="secondary" onclick="btMasterUploadActQr('${masterEsc(number)}')">${masterCache.acts.find(a=>String(a.number)===String(number))?.receipt_qr?'↻ Заменить QR-чек':'＋ Добавить QR-чек'}</button>
+ <p id="btActQrStatus" class="subtitle" role="status"></p>
+ <p class="subtitle">Чек сохраняется у выбранного акта. QR автоматически добавляется в PDF, но не подтверждает оплату.</p></div>
  <div class="button-row"><button type="button" onclick="openMasterActPdf('${masterEsc(number)}')">📄 Открыть PDF</button>
  <button type="button" class="secondary" onclick="downloadMasterAct('${masterEsc(number)}')">↓ Сохранить PDF</button></div>
  <div class="button-row"><button type="button" onclick="shareMasterAct('${masterEsc(number)}')">↗ Поделиться через Telegram</button>
