@@ -1,2 +1,2 @@
 // Автоматически обновляется start_cloudflare_auto.py. Не редактируйте вручную.
-window.REMONT_ADVERTISER_API_BASE = "https://laptop-household-thereof-senior.trycloudflare.com";
+window.REMONT_ADVERTISER_API_BASE = "https://achievements-engaging-outdoor-regulation.trycloudflare.com";
